@@ -1,0 +1,9 @@
+{
+  "name": "wallet-availability",
+  "version": "1.0.0",
+  "description": "Native module to detect installed wallet apps",
+  "main": "src/index.ts",
+  "peerDependencies": {
+    "expo-modules-core": "*"
+  }
+}
