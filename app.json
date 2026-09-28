@@ -67,7 +67,8 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "./plugins/withAndroidWalletQueries"
+      "./plugins/withAndroidWalletQueries",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

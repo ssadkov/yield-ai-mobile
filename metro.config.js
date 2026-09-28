@@ -49,6 +49,17 @@ function resolveViaBrowserField(moduleName) {
 }
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Privy's Expo setup: isows/jose (used by viem and Privy) and zustand inside
+  // @privy-io must resolve without package exports, or Metro picks their
+  // browser/ESM builds. Scoped so the app's own zustand import is untouched.
+  if (
+    /^(isows|jose)(\/|$)/.test(moduleName) ||
+    (/^zustand(\/|$)/.test(moduleName) &&
+      (context.originModulePath || "").includes("/node_modules/@privy-io/"))
+  ) {
+    const ctx = { ...context, unstable_enablePackageExports: false };
+    return ctx.resolveRequest(ctx, moduleName, platform);
+  }
   // @noble/hashes exports "./crypto" but lacks a "require" condition, so Metro
   // falls back to file-based resolution and warns. Resolve directly to the file
   // to bypass the exports-map validation.

@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { MockWalletPrompt, Toaster, WalletRuntime, colors as C, useHydrated } from "@/features/yield-app";
+import { MockWalletPrompt, PrivyRoot, Toaster, WalletRuntime, colors as C, useHydrated } from "@/features/yield-app";
 
 SplashScreen.preventAutoHideAsync();
 SplashScreen.setOptions({ duration: 250, fade: true });
@@ -25,21 +25,23 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: C.white }}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <WalletRuntime />
-        {ready ? (
-          <View style={{ flex: 1 }}>
-            <Stack screenOptions={{ headerShown: false, animation: "slide_from_right", contentStyle: { backgroundColor: C.white } }}>
-              <Stack.Screen name="index" options={{ animation: "fade" }} />
-              <Stack.Screen name="home" options={{ animation: "fade" }} />
-              <Stack.Screen name="success" options={{ animation: "fade_from_bottom" }} />
-              <Stack.Screen name="withdraw/[id]" options={{ animation: "fade_from_bottom" }} />
-              <Stack.Screen name="wallet-callback" options={{ presentation: "transparentModal", animation: "none" }} />
-            </Stack>
-            <Toaster />
-            <MockWalletPrompt />
-          </View>
-        ) : null}
+        <PrivyRoot>
+          <StatusBar style="dark" />
+          <WalletRuntime />
+          {ready ? (
+            <View style={{ flex: 1 }}>
+              <Stack screenOptions={{ headerShown: false, animation: "slide_from_right", contentStyle: { backgroundColor: C.white } }}>
+                <Stack.Screen name="index" options={{ animation: "fade" }} />
+                <Stack.Screen name="home" options={{ animation: "fade" }} />
+                <Stack.Screen name="success" options={{ animation: "fade_from_bottom" }} />
+                <Stack.Screen name="withdraw/[id]" options={{ animation: "fade_from_bottom" }} />
+                <Stack.Screen name="wallet-callback" options={{ presentation: "transparentModal", animation: "none" }} />
+              </Stack>
+              <Toaster />
+              <MockWalletPrompt />
+            </View>
+          ) : null}
+        </PrivyRoot>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

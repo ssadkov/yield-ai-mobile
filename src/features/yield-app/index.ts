@@ -11,3 +11,4 @@ export { MockWalletPrompt } from "./ui/MockWalletPrompt";
 export { Toaster } from "./ui/Toast";
 export { C as colors } from "./ui/theme";
 export { WalletRuntime } from "./wallet/WalletRuntime";
+export { PrivyRoot } from "./wallet/privy";

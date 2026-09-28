@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type { WalletService } from "@/core/wallet";
 import type { DetectedWallet } from "@/features/wallet-discovery";
 import { MWA_WALLET_ID, SEED_VAULT_WALLET_ID } from "@/features/wallet-connection-solana";
+import { PRIVY_ENABLED, getPrivy } from "./privy";
 import { WalletError, toWalletError, type TxStep, type WalletDriver, type WalletId } from "./types";
 
 /**
@@ -39,6 +40,11 @@ let session: string | null = null;
 /** Maps a row on the Connect sheet to the connector registered by useWalletRegistry. */
 export function nativeWalletId(id: WalletId, env: Pick<WalletEnv, "isSolanaPhone" | "phantomInstalled">): string {
   const notYet = () => new WalletError("NOT_SUPPORTED", "Not available in the app yet.");
+  // Privy runs outside WalletService (Google sign-in + embedded wallet), see ./privy.tsx.
+  if (id === "privy") {
+    if (PRIVY_ENABLED) return "privy";
+    throw notYet();
+  }
   if (id === "seed-vault" || id === "mwa") {
     if (Platform.OS !== "android") return "phantom";
     return env.isSolanaPhone ? SEED_VAULT_WALLET_ID : MWA_WALLET_ID;
@@ -87,6 +93,14 @@ export function createNativeDriver(getWalletId: () => WalletId | undefined): Wal
   return {
     kind: "native",
     async connect(walletId) {
+      if (walletId === "privy") {
+        nativeWalletId(walletId, useWalletEnv.getState());
+        try {
+          return { address: await getPrivy().login() };
+        } catch (e) {
+          throw toWalletError(e);
+        }
+      }
       const service = requireService();
       const nativeId = nativeWalletId(walletId, useWalletEnv.getState());
       try {
@@ -106,6 +120,14 @@ export function createNativeDriver(getWalletId: () => WalletId | undefined): Wal
       }
     },
     async disconnect() {
+      if (getWalletId() === "privy") {
+        try {
+          await getPrivy().logout();
+        } catch {
+          // Already signed out, or Privy never loaded.
+        }
+        return;
+      }
       const service = useWalletEnv.getState().service;
       session = null;
       try {
@@ -117,11 +139,17 @@ export function createNativeDriver(getWalletId: () => WalletId | undefined): Wal
     async signAndSubmit(step: TxStep, onPhase) {
       onPhase("signing");
       try {
+        const message = `Yield AI (test): ${step.title} — ${step.detail}`;
+        if (getWalletId() === "privy") {
+          const signature = await getPrivy().signMessage(message);
+          onPhase("submitting");
+          return signature;
+        }
         const { service } = await ensureSession(getWalletId() ?? "seed-vault");
         // TODO(backend): sign and submit the real transaction once the backend builds it
         // (service.signTransaction(chain, base64, true)). Until then each step is signed as a
         // readable message, which still runs the real wallet approval (double-tap on Seeker).
-        const signature = await service.signMessage(CHAIN, `Yield AI (test): ${step.title} — ${step.detail}`, "utf8");
+        const signature = await service.signMessage(CHAIN, message, "utf8");
         onPhase("submitting");
         return signature;
       } catch (e) {
