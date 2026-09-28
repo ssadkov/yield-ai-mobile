@@ -73,8 +73,13 @@ export class MwaAdapter implements SolanaWalletAdapter {
           walletUriBase: this.walletUriBase,
         });
       }
-      return this.walletUriBase
-        ? await transact(callback, { baseUri: this.walletUriBase })
+      // walletPackageName is read by the patched native module (scripts/patch-solana-mwa-package-target.js).
+      const target = this.config.walletPackageName;
+      return this.walletUriBase || target
+        ? await transact(callback, {
+            ...(this.walletUriBase ? { baseUri: this.walletUriBase } : {}),
+            ...(target ? { walletPackageName: target } : {}),
+          } as Parameters<typeof transact>[1])
         : await transact(callback);
     } catch (error) {
       if (__DEV__) {

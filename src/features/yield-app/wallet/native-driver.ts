@@ -26,7 +26,7 @@ export const useWalletEnv = create<WalletEnv>(() => ({
   detected: [],
 }));
 
-/** Solana wallets that also speak MWA: on Android (Seeker included) they are reached through the MWA picker. */
+/** Solana wallets that speak MWA: on Android each has its own connector aimed at the wallet app (no chooser). */
 const MWA_WALLETS = new Set<WalletId>(["solflare", "backpack", "jupiter"]);
 /** Wallets with their own connector on iOS (registered by useWalletRegistry when installed). */
 const IOS_WALLETS = new Set<WalletId>(["phantom", "solflare", "backpack", "jupiter"]);
@@ -47,7 +47,7 @@ export function nativeWalletId(id: WalletId, env: Pick<WalletEnv, "isSolanaPhone
     if (IOS_WALLETS.has(id)) return id;
     throw notYet();
   }
-  if (MWA_WALLETS.has(id)) return MWA_WALLET_ID;
+  if (MWA_WALLETS.has(id)) return id;
   if (id === "phantom") {
     // Regular Android phones reach Phantom through the MWA system picker.
     if (!env.isSolanaPhone) return MWA_WALLET_ID;

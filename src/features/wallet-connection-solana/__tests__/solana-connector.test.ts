@@ -217,10 +217,17 @@ describe("SolanaConnector", () => {
     it("rejects other proprietary Solana wallet ids on Android", () => {
       setPlatformOS("android");
       expect(
-        () => new SolanaConnector({ ...config, walletId: "solflare" }),
+        () => new SolanaConnector({ ...config, walletId: "glow" }),
       ).toThrow(
-        /Unsupported Solana wallet on Android: solflare/,
+        /Unsupported Solana wallet on Android: glow/,
       );
+    });
+
+    it("uses an MWA connector for Solflare on Android", () => {
+      setPlatformOS("android");
+      expect(
+        () => new SolanaConnector({ ...config, walletId: "solflare", walletPackageName: "com.solflare.mobile" }),
+      ).not.toThrow();
     });
 
   });

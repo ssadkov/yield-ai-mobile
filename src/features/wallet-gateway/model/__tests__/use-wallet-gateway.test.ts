@@ -36,6 +36,7 @@ jest.mock("@/features/wallet-connection-solana", () => ({
   SEED_VAULT_WALLET_ID: "seed-vault",
   DEEPLINK_WALLET_IDS: new Set(["phantom", "solflare", "backpack"]),
   WC_WALLET_IDS: new Set(["jupiter"]),
+  ANDROID_MWA_WALLET_IDS: new Set(["solflare", "backpack", "jupiter"]),
   SUPPORTED_SOLANA_WALLET_IDS: new Set([
     "mwa",
     "seed-vault",

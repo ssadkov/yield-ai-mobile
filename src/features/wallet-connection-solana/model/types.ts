@@ -9,6 +9,8 @@ export interface SolanaWalletConfig {
   appScheme: string;
   cluster: SolanaCluster;
   appName: string;
+  /** Android: send the MWA association intent straight to this package instead of the system chooser. */
+  walletPackageName?: string;
 }
 
 // ─── Internal adapter interface ───────────────────────────────────────────────

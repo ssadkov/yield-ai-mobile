@@ -17,6 +17,10 @@ export const DEEPLINK_WALLET_IDS = new Set(["phantom", "solflare", "backpack"]);
 // Jupiter has no native deeplink flow — WC is the only option.
 export const WC_WALLET_IDS = new Set(["jupiter"]);
 
+// Solana wallets that speak MWA. On Android each gets its own MWA connector aimed
+// at the wallet's package, so the user lands in that wallet instead of a chooser.
+export const ANDROID_MWA_WALLET_IDS = new Set(["solflare", "backpack", "jupiter"]);
+
 // Generic Android Mobile Wallet Adapter picker. Android resolves this through
 // the system intent flow to any installed Solana wallet that supports MWA.
 export const MWA_WALLET_ID = "mwa";
@@ -116,7 +120,7 @@ class LazySeedVaultAdapter implements SolanaWalletAdapter {
 
 function createSolanaAdapter(config: SolanaWalletConfig): SolanaWalletAdapter {
   if (Platform.OS === "android") {
-    if (config.walletId === MWA_WALLET_ID) {
+    if (config.walletId === MWA_WALLET_ID || ANDROID_MWA_WALLET_IDS.has(config.walletId)) {
       // Keep MWA out of the regular Expo Go startup path. Expo Go does not ship
       // SolanaMobileWalletAdapter, so importing it eagerly crashes the app.
       return new LazyMwaAdapter(config);

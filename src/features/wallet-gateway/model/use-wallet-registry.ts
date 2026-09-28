@@ -4,6 +4,7 @@ import { ConnectorRegistry } from "@/core/wallet";
 import {
   SolanaConnector,
   SUPPORTED_SOLANA_WALLET_IDS,
+  ANDROID_MWA_WALLET_IDS,
   MWA_WALLET_ID,
   SEED_VAULT_WALLET_ID,
 } from "@/features/wallet-connection-solana";
@@ -19,8 +20,9 @@ const APP_NAME = "YieldAI";
 function buildSolanaConfig(
   walletId: string,
   cluster: SolanaCluster,
+  walletPackageName?: string,
 ): SolanaWalletConfig {
-  return { walletId, appScheme: APP_SCHEME, cluster, appName: APP_NAME };
+  return { walletId, appScheme: APP_SCHEME, cluster, appName: APP_NAME, walletPackageName };
 }
 
 function buildAptosConfig(
@@ -35,12 +37,13 @@ function getInstalledSolanaWallets(
   isSolanaPhone: boolean,
 ): DetectedWallet[] {
   if (Platform.OS === "android") {
-    if (!isSolanaPhone) return [];
+    // MWA wallets (Solflare, …) get a connector aimed at their package; Phantom has
+    // its own deeplink connector on a Seeker and goes through the MWA picker elsewhere.
     return wallets.filter(
       (wallet) =>
         wallet.ecosystem === "solana" &&
-        wallet.id === "phantom" &&
-        wallet.isInstalled,
+        wallet.isInstalled &&
+        (ANDROID_MWA_WALLET_IDS.has(wallet.id) || (isSolanaPhone && wallet.id === "phantom")),
     );
   }
   return wallets.filter((w) => {
@@ -74,11 +77,6 @@ export function useWalletRegistry(options: UseWalletRegistryOptions): ConnectorR
   const registeredWalletIdsRef = useRef<string[]>([]);
   const androidSolanaWalletId =
     isSolanaPhone ? SEED_VAULT_WALLET_ID : MWA_WALLET_ID;
-  // A Seeker also gets the MWA picker, so other installed Solana wallets (Solflare, …) can connect.
-  const androidBaseIds = isSolanaPhone
-    ? [SEED_VAULT_WALLET_ID, MWA_WALLET_ID]
-    : [MWA_WALLET_ID];
-  const androidBaseKey = androidBaseIds.join(",");
 
   if (!registryRef.current) {
     registryRef.current = new ConnectorRegistry();
@@ -112,7 +110,7 @@ export function useWalletRegistry(options: UseWalletRegistryOptions): ConnectorR
     const currentIds = registeredWalletIdsRef.current.sort().join(",");
     const targetIds =
       Platform.OS === "android"
-        ? [...androidBaseIds, ...installedSolana.map((wallet) => wallet.id)]
+        ? [androidSolanaWalletId, ...installedSolana.map((wallet) => wallet.id)]
             .sort()
             .join(",")
         : installedSolana.map((w) => w.id).sort().join(",");
@@ -127,13 +125,14 @@ export function useWalletRegistry(options: UseWalletRegistryOptions): ConnectorR
     // Register fresh connectors
     const newIds: string[] = [];
     if (Platform.OS === "android") {
-      for (const id of androidBaseIds) {
-        registry.register(new SolanaConnector(buildSolanaConfig(id, solanaCluster)));
-        newIds.push(id);
-      }
+      registry.register(
+        new SolanaConnector(buildSolanaConfig(androidSolanaWalletId, solanaCluster)),
+      );
+      newIds.push(androidSolanaWalletId);
       for (const wallet of installedSolana) {
+        const target = ANDROID_MWA_WALLET_IDS.has(wallet.id) ? wallet.androidPackage : undefined;
         registry.register(
-          new SolanaConnector(buildSolanaConfig(wallet.id, solanaCluster)),
+          new SolanaConnector(buildSolanaConfig(wallet.id, solanaCluster, target)),
         );
         newIds.push(wallet.id);
       }
@@ -154,9 +153,7 @@ export function useWalletRegistry(options: UseWalletRegistryOptions): ConnectorR
 
     registeredWalletIdsRef.current = newIds;
     clusterRef.current = solanaCluster;
-    // androidBaseKey stands in for androidBaseIds (a new array every render).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [androidBaseKey, installedIds, solanaCluster, registry, installedSolana]);
+  }, [androidSolanaWalletId, installedIds, solanaCluster, registry, installedSolana]);
 
   useEffect(() => {
     const handler = createDeeplinkHandler(registry);
