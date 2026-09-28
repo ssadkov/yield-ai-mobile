@@ -74,6 +74,11 @@ export function useWalletRegistry(options: UseWalletRegistryOptions): ConnectorR
   const registeredWalletIdsRef = useRef<string[]>([]);
   const androidSolanaWalletId =
     isSolanaPhone ? SEED_VAULT_WALLET_ID : MWA_WALLET_ID;
+  // A Seeker also gets the MWA picker, so other installed Solana wallets (Solflare, …) can connect.
+  const androidBaseIds = isSolanaPhone
+    ? [SEED_VAULT_WALLET_ID, MWA_WALLET_ID]
+    : [MWA_WALLET_ID];
+  const androidBaseKey = androidBaseIds.join(",");
 
   if (!registryRef.current) {
     registryRef.current = new ConnectorRegistry();
@@ -107,7 +112,7 @@ export function useWalletRegistry(options: UseWalletRegistryOptions): ConnectorR
     const currentIds = registeredWalletIdsRef.current.sort().join(",");
     const targetIds =
       Platform.OS === "android"
-        ? [androidSolanaWalletId, ...installedSolana.map((wallet) => wallet.id)]
+        ? [...androidBaseIds, ...installedSolana.map((wallet) => wallet.id)]
             .sort()
             .join(",")
         : installedSolana.map((w) => w.id).sort().join(",");
@@ -122,10 +127,10 @@ export function useWalletRegistry(options: UseWalletRegistryOptions): ConnectorR
     // Register fresh connectors
     const newIds: string[] = [];
     if (Platform.OS === "android") {
-      registry.register(
-        new SolanaConnector(buildSolanaConfig(androidSolanaWalletId, solanaCluster)),
-      );
-      newIds.push(androidSolanaWalletId);
+      for (const id of androidBaseIds) {
+        registry.register(new SolanaConnector(buildSolanaConfig(id, solanaCluster)));
+        newIds.push(id);
+      }
       for (const wallet of installedSolana) {
         registry.register(
           new SolanaConnector(buildSolanaConfig(wallet.id, solanaCluster)),
@@ -149,7 +154,9 @@ export function useWalletRegistry(options: UseWalletRegistryOptions): ConnectorR
 
     registeredWalletIdsRef.current = newIds;
     clusterRef.current = solanaCluster;
-  }, [androidSolanaWalletId, installedIds, solanaCluster, registry, installedSolana]);
+    // androidBaseKey stands in for androidBaseIds (a new array every render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [androidBaseKey, installedIds, solanaCluster, registry, installedSolana]);
 
   useEffect(() => {
     const handler = createDeeplinkHandler(registry);

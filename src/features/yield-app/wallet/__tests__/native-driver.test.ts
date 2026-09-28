@@ -35,12 +35,12 @@ describe("canConnect", () => {
     Platform.OS = "android";
   });
 
-  it("routes MWA-capable Solana wallets through the MWA picker on a regular Android phone", () => {
+  it("routes MWA-capable Solana wallets through the MWA picker on Android, Seeker included", () => {
     Platform.OS = "android";
     for (const id of ["solflare", "backpack", "jupiter"] as const) {
       expect(nativeWalletId(id, android)).toBe("mwa");
+      expect(nativeWalletId(id, seeker)).toBe("mwa");
     }
-    expect(canConnect("solflare", seeker)).toBe(false);
   });
 
   it("marks wallets without a connector as not connectable (\"Soon\")", () => {

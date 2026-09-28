@@ -29,7 +29,6 @@ export function HomeScreen() {
   const router = useRouter();
   const p = usePortfolio();
   const wallet = useApp((s) => s.wallet);
-  const loadDemo = useApp((s) => s.loadDemo);
   const [range, setRange] = useState<Range>("1W");
   const [info, setInfo] = useState(false);
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -90,74 +89,79 @@ export function HomeScreen() {
         </Tap>
       </View>
 
-      <View style={{ marginTop: -8, alignItems: "center", gap: 10, zIndex: 10 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <IconTrend size={18} color={C.mute} />
-          <T size={16} w={500} color={C.ink3}>
-            {empty ? `Earn ${pct(STRATEGIES.flexible.apr)}` : `Earning ${pct(p.apr)}`}
-          </T>
-          <Pressable accessibilityRole="button" accessibilityLabel="About this rate" accessibilityState={{ expanded: info }} hitSlop={14} onPress={() => setInfo((v) => !v)}>
-            <IconInfo size={16} color={C.mute} />
-          </Pressable>
-          {info && (
-            <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={[{ position: "absolute", top: 30, alignSelf: "center", left: "50%", marginLeft: -130, width: 260, borderRadius: 16, backgroundColor: C.white, padding: 12, zIndex: 10 }, shadow.tip]}>
-              <Pressable onPress={() => setInfo(false)} accessibilityRole="text">
-                <T size={13} lh={1.45} color={C.ink2} center>
-                  {empty ? "Flexible APR" : "Your blended APR"} is variable and not a guarantee. It changes with market rates.
-                </T>
-              </Pressable>
-            </Animated.View>
-          )}
-        </View>
-        <View accessibilityLabel={`Balance ${money(p.total)}`} style={{ flexDirection: "row", alignItems: "baseline" }}>
-          <T size={64} w={800} tracking={-0.045} tnum>
-            {whole}
-          </T>
-          <T size={40} w={800} tracking={-0.045} tnum>
-            {cents}
-          </T>
-        </View>
-        {empty ? (
-          <T size={15} color={C.ink4}>
-            Make your first deposit to start earning
-          </T>
-        ) : (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.gain2 }} />
-            <T size={15} w={700} tnum color={C.gain}>
-              {money(p.earnedWeek)} earned
+      {/* Balance stays on top; the chart takes the free height, so the plans sit right above the buttons. */}
+      <View style={{ flex: 1, marginTop: -8, gap: 18, zIndex: 10 }}>
+        <View style={{ alignItems: "center", gap: 10, zIndex: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <IconTrend size={18} color={C.mute} />
+            <T size={16} w={500} color={C.ink3}>
+              {empty ? `Earn ${pct(STRATEGIES.flexible.apr)}` : `Earning ${pct(p.apr)}`}
             </T>
-            <T size={15} color={C.ink4}>
-              this week
+            <Pressable accessibilityRole="button" accessibilityLabel="About this rate" accessibilityState={{ expanded: info }} hitSlop={14} onPress={() => setInfo((v) => !v)}>
+              <IconInfo size={16} color={C.mute} />
+            </Pressable>
+            {info && (
+              <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={[{ position: "absolute", top: 30, alignSelf: "center", left: "50%", marginLeft: -130, width: 260, borderRadius: 16, backgroundColor: C.white, padding: 12, zIndex: 10 }, shadow.tip]}>
+                <Pressable onPress={() => setInfo(false)} accessibilityRole="text">
+                  <T size={13} lh={1.45} color={C.ink2} center>
+                    {empty ? "Flexible APR" : "Your blended APR"} is variable and not a guarantee. It changes with market rates.
+                  </T>
+                </Pressable>
+              </Animated.View>
+            )}
+          </View>
+          <View accessibilityLabel={`Balance ${money(p.total)}`} style={{ flexDirection: "row", alignItems: "baseline" }}>
+            <T size={64} w={800} tracking={-0.045} tnum>
+              {whole}
+            </T>
+            <T size={40} w={800} tracking={-0.045} tnum>
+              {cents}
             </T>
           </View>
-        )}
-      </View>
-
-      <BarChart buckets={buckets} empty={empty} />
-
-      {!empty && (
-        <View accessibilityRole="tablist" style={{ marginTop: -8, flexDirection: "row", justifyContent: "space-between" }}>
-          {RANGES.map((r) => {
-            const on = r === range;
-            return (
-              <Tap
-                key={r}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: on }}
-                feedback="select"
-                scale={0.95}
-                onPress={() => setRange(r)}
-                style={{ height: 40, borderRadius: 20, paddingHorizontal: 16, justifyContent: "center", backgroundColor: on ? C.raised : "transparent" }}
-              >
-                <T size={14} w={600} color={on ? C.ink : C.ink4}>
-                  {r}
-                </T>
-              </Tap>
-            );
-          })}
+          {empty ? (
+            <T size={15} color={C.ink4}>
+              Make your first deposit to start earning
+            </T>
+          ) : (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.gain2 }} />
+              <T size={15} w={700} tnum color={C.gain}>
+                {money(p.earnedWeek)} earned
+              </T>
+              <T size={15} color={C.ink4}>
+                this week
+              </T>
+            </View>
+          )}
         </View>
-      )}
+
+        <View style={{ flex: 1, justifyContent: "center", gap: 18 }}>
+          <BarChart buckets={buckets} empty={empty} />
+
+          {!empty && (
+            <View accessibilityRole="tablist" style={{ marginTop: -8, flexDirection: "row", justifyContent: "space-between" }}>
+              {RANGES.map((r) => {
+                const on = r === range;
+                return (
+                  <Tap
+                    key={r}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: on }}
+                    feedback="select"
+                    scale={0.95}
+                    onPress={() => setRange(r)}
+                    style={{ height: 40, borderRadius: 20, paddingHorizontal: 16, justifyContent: "center", backgroundColor: on ? C.raised : "transparent" }}
+                  >
+                    <T size={14} w={600} color={on ? C.ink : C.ink4}>
+                      {r}
+                    </T>
+                  </Tap>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </View>
 
       <View style={{ gap: 10 }} accessibilityLabel="Your products">
         {p.flexible > 0 && <ProductCard id="flexible" amount={money(p.flexible)} apr={STRATEGIES.flexible.apr} sub="Withdraw any time" />}
@@ -166,16 +170,9 @@ export function HomeScreen() {
         ))}
         {p.flexible <= 0 && <AddProductCard id="flexible" onPress={() => router.push({ pathname: "/strategy", params: { s: "flexible" } })} />}
         {p.fixed.length === 0 && <AddProductCard id="fixed" onPress={() => router.push({ pathname: "/strategy", params: { s: "fixed" } })} />}
-        {empty && (
-          <Tap accessibilityRole="button" feedback="none" onPress={loadDemo} style={{ height: 44, alignItems: "center", justifyContent: "center" }}>
-            <T size={14} w={600} color={C.blue}>
-              Or explore with demo data
-            </T>
-          </Tap>
-        )}
       </View>
 
-      <View style={{ marginTop: "auto", flexDirection: "row", gap: 12 }}>
+      <View style={{ flexDirection: "row", gap: 12 }}>
         <View style={{ flex: 1 }}>
           <PrimaryButton label="Deposit" onPress={() => setSheet(wallet ? "deposit" : "connect")}>
             <IconDown size={20} sw={2.2} color={C.white} />
