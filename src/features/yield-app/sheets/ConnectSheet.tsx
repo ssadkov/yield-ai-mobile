@@ -39,7 +39,6 @@ export function ConnectSheet({ open, onClose, onConnected }: { open: boolean; on
   const installed = new Set(detected.filter((w) => w.isInstalled).map((w) => w.id));
   const fixed: Row[] = [
     { id: "phantom", name: "Phantom", sub: "Solana wallet app" },
-    { id: "metamask", name: "MetaMask", sub: "Solana account in MetaMask" },
     { id: "privy", name: "Privy", sub: "Sign in with email or Google" },
   ];
   // Every other wallet found on the phone gets its own row, even before the app can connect to it.

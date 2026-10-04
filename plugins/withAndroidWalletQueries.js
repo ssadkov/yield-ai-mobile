@@ -12,14 +12,6 @@ const PACKAGES = [
   'io.glow.app',
   'com.aptoslabs.petra.wallet',
   'com.martianwallet.app',
-  'io.metamask',
-  'com.wallet.crypto.trustapp',
-  'com.okinc.okex.gp',
-  'com.okx.wallet',
-  'com.bitkeep.wallet',
-  'org.toshi',
-  'me.rainbow',
-  'com.uniswap.mobile',
 ];
 
 const SCHEME_INTENTS = [

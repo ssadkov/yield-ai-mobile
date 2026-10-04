@@ -56,8 +56,8 @@ describe("ConnectSheet", () => {
 
     // Another wallet works right away.
     mockDriver.connect.mockResolvedValueOnce({ address: "Addr2" });
-    await act(async () => fireEvent.press(screen.getByLabelText("MetaMask")));
-    expect(mockDriver.connect).toHaveBeenLastCalledWith("metamask", "MetaMask");
+    await act(async () => fireEvent.press(screen.getByLabelText("Privy")));
+    expect(mockDriver.connect).toHaveBeenLastCalledWith("privy", "Privy");
     expect(onConnected).toHaveBeenCalledTimes(1);
   });
 });
