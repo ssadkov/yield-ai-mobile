@@ -13,11 +13,20 @@ import { SideButtonHint, Skeleton } from "../ui/Screen";
 import { T } from "../ui/Text";
 import { TxFlowView, signHint } from "../ui/TxFlowView";
 import { C } from "../ui/theme";
+import { DEVNET } from "../devnet/config";
+import { devnetDepositSteps, signedAmount, useSafeBalances } from "../devnet/state";
 
 let balanceLoaded = false;
 /** Mock "fetching wallet balance" on first open. TODO(backend): read the wallet's USDC balance. */
 function useWalletUsdc() {
   const usdc = useApp((s) => s.walletUsdc);
+  const chain = useSafeBalances();
+  const mock = useMockWalletUsdc(usdc);
+  if (DEVNET) return { usdc: chain?.walletUsdc ?? 0, loading: !chain };
+  return mock;
+}
+
+function useMockWalletUsdc(usdc: number) {
   const [loading, setLoading] = useState(!balanceLoaded);
   useEffect(() => {
     if (balanceLoaded) return;
@@ -51,9 +60,9 @@ function DepositBody({ strategy, onClose, onDone, setLocked }: { strategy: Strat
   const events = useApp((s) => s.events);
   const recordDeposit = useApp((s) => s.recordDeposit);
   const { usdc, loading } = useWalletUsdc();
-  const [amount, setAmount] = useState(() => Math.min(1000, usdc || 1000));
+  const [amount, setAmount] = useState(() => (DEVNET ? 1 : Math.min(1000, usdc || 1000)));
   const flow = useTxFlow(wallet?.name ?? "your wallet", (sigs) => {
-    const dep = recordDeposit({ strategy, amount, txIds: sigs });
+    const dep = DEVNET ? recordDeposit({ strategy: "flexible", amount: signedAmount(sigs[0], amount), txIds: sigs, agent: false }) : recordDeposit({ strategy, amount, txIds: sigs });
     setTimeout(() => onDone(dep), 450);
   });
   const s = STRATEGIES[strategy];
@@ -107,13 +116,28 @@ function DepositBody({ strategy, onClose, onDone, setLocked }: { strategy: Strat
         value={amount}
         onChange={setAmount}
         chips={[
-          { value: 100, label: "$100" },
-          { value: 500, label: "$500" },
-          { value: 1000, label: "$1,000" },
-          { value: usdc, label: "Max", disabled: noFunds || loading },
+          ...(DEVNET
+            ? [
+                { value: 0.5, label: "$0.50" },
+                { value: 1, label: "$1" },
+                { value: 2, label: "$2" },
+              ]
+            : [
+                { value: 100, label: "$100" },
+                { value: 500, label: "$500" },
+                { value: 1000, label: "$1,000" },
+              ]),
+          { value: Math.floor(usdc * 100) / 100, label: "Max", disabled: noFunds || loading },
         ]}
       />
 
+      {DEVNET ? (
+        <View style={{ borderRadius: 18, backgroundColor: C.surface, padding: 16 }}>
+          <T size={14} lh={1.5} color={C.ink2}>
+            Test USDC goes into your Safe on Solana Devnet and stays idle. You pay the network fee in devnet SOL.
+          </T>
+        </View>
+      ) : (
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderRadius: 18, backgroundColor: C.surface, padding: 16 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: strategy === "fixed" ? C.navy : C.gain }} />
@@ -129,10 +153,11 @@ function DepositBody({ strategy, onClose, onDone, setLocked }: { strategy: Strat
           {s.lockDays ? "in 100 days" : "/ year"}
         </T>
       </View>
+      )}
 
       <View style={{ gap: 14 }}>
         <SideButtonHint text={wallet?.id === "seed-vault" || !wallet ? "Then double-tap the side button to sign" : signHint(wallet.id, wallet.name)} />
-        <PrimaryButton onPress={() => flow.start(depositPlan(strategy, amount, isFirst))} disabled={!canDeposit}>
+        <PrimaryButton onPress={() => flow.start(DEVNET ? devnetDepositSteps(amount) : depositPlan(strategy, amount, isFirst))} disabled={!canDeposit}>
           {amount > 0 ? `Deposit ${moneyAuto(amount)}` : "Enter an amount"}
         </PrimaryButton>
       </View>

@@ -156,5 +156,22 @@ export function createNativeDriver(getWalletId: () => WalletId | undefined): Wal
         throw toWalletError(e);
       }
     },
+    async prepareSigning() {
+      if (getWalletId() === "privy") return;
+      try {
+        await ensureSession(getWalletId() ?? "seed-vault");
+      } catch (e) {
+        throw toWalletError(e);
+      }
+    },
+    async signTransaction(txBase64) {
+      if (getWalletId() === "privy") throw new WalletError("NOT_SUPPORTED", "Google sign-in can't sign Solana transactions yet. Connect Seed Vault or another wallet.");
+      try {
+        const { service } = await ensureSession(getWalletId() ?? "seed-vault");
+        return await service.signTransaction(CHAIN, txBase64, false);
+      } catch (e) {
+        throw toWalletError(e);
+      }
+    },
   };
 }

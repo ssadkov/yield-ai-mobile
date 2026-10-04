@@ -1,6 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
-import { View } from "react-native";
+import { Linking, View } from "react-native";
 import { shortAddress } from "../lib/format";
 import { useApp } from "../lib/store";
 import { BottomSheet, SheetHeader } from "../ui/BottomSheet";
@@ -12,6 +12,9 @@ import { toast } from "../ui/Toast";
 import { IconCopy, IconLogout } from "../ui/icons";
 import { C, shadow } from "../ui/theme";
 import { getDriver, useIsMock } from "../wallet";
+import { sol } from "../devnet/api";
+import { DEVNET, FAUCET_SOL, FAUCET_USDC, explorerAddress } from "../devnet/config";
+import { useSafe } from "../devnet/state";
 
 export function ProfileSheet({ open, onClose, onConnect }: { open: boolean; onClose: () => void; onConnect: () => void }) {
   const router = useRouter();
@@ -22,6 +25,7 @@ export function ProfileSheet({ open, onClose, onConnect }: { open: boolean; onCl
   const loadDemo = useApp((s) => s.loadDemo);
   const reset = useApp((s) => s.reset);
   const isMock = useIsMock();
+  const safe = useSafe((s) => (s.safe?.owner.address === wallet?.address ? s.safe : null));
 
   return (
     <BottomSheet open={open} onClose={onClose} label="Account" gap={20}>
@@ -74,6 +78,27 @@ export function ProfileSheet({ open, onClose, onConnect }: { open: boolean; onCl
         </Tap>
       )}
 
+      {DEVNET && wallet && (
+        <View style={{ gap: 10, borderTopWidth: 1, borderColor: C.line, paddingTop: 16 }}>
+          <T size={12} w={600} tracking={0.08} color={C.ink3}>
+            SOLANA DEVNET
+          </T>
+          <Row label="Devnet SOL" value={safe ? sol(safe.walletSolLamports) : "…"} />
+          <Row label="Test USDC in wallet" value={safe ? Number(safe.walletUsdc).toString() : "…"} />
+          <Row label="Idle USDC in Safe" value={safe ? Number(safe.idleUsdc).toString() : "…"} />
+          {safe && (
+            <Tap accessibilityRole="link" feedback="none" onPress={() => Linking.openURL(explorerAddress(safe.safe))}>
+              <Row label="Safe" value={safe.exists ? shortAddress(safe.safe) : "Created with your first deposit"} link={safe.exists} />
+            </Tap>
+          )}
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <SmallButton label="Get devnet SOL" onPress={() => Linking.openURL(FAUCET_SOL)} />
+            <SmallButton label="Get test USDC" onPress={() => Linking.openURL(FAUCET_USDC)} />
+          </View>
+        </View>
+      )}
+
+      {!DEVNET && (
       <View style={{ gap: 12, borderTopWidth: 1, borderColor: C.line, paddingTop: 16 }}>
         <T size={12} w={600} tracking={0.08} color={C.ink3}>
           DEMO
@@ -128,7 +153,21 @@ export function ProfileSheet({ open, onClose, onConnect }: { open: boolean; onCl
           />
         </View>
       </View>
+      )}
     </BottomSheet>
+  );
+}
+
+function Row({ label, value, link }: { label: string; value: string; link?: boolean }) {
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+      <T size={14} color={C.ink2}>
+        {label}
+      </T>
+      <T size={14} w={600} tnum color={link ? C.blue : C.ink}>
+        {value}
+      </T>
+    </View>
   );
 }
 

@@ -6,6 +6,7 @@ import type { StrategyId } from "./strategies";
 import { STRATEGIES } from "./strategies";
 import type { WalletId } from "../wallet/types";
 import { addDays, startOfDay } from "./format";
+import { DEVNET } from "../devnet/config";
 
 export type ConnectedWallet = { id: WalletId; name: string; address: string };
 
@@ -20,6 +21,8 @@ export type AccountEvent = {
   first?: boolean;
   /** Fixed deposits only */
   unlockAt?: number;
+  /** Wallet that made it (Devnet keeps one history per wallet). */
+  owner?: string;
 };
 
 export type AgentEvent = {
@@ -65,7 +68,7 @@ type Actions = {
   setOnboarded: () => void;
   connect: (w: ConnectedWallet) => void;
   disconnect: () => void;
-  recordDeposit: (d: { strategy: StrategyId; amount: number; txIds: string[] }) => AccountEvent;
+  recordDeposit: (d: { strategy: StrategyId; amount: number; txIds: string[]; agent?: boolean }) => AccountEvent;
   requestWithdrawal: (d: { amount: number; txIds: string[] }) => Withdrawal;
   completeWithdrawal: (id: string) => void;
   setMockApproval: (m: MockApproval) => void;
@@ -110,9 +113,10 @@ export const useApp = create<State & Actions>()(
 
       disconnect: () => set({ wallet: null }),
 
-      recordDeposit: ({ strategy, amount, txIds }) => {
+      recordDeposit: ({ strategy, amount, txIds, agent: withAgent = true }) => {
         const now = Date.now();
-        const first = !get().events.some((e) => e.src === "account" && e.kind === "deposit");
+        const owner = get().wallet?.address;
+        const first = !get().events.some((e) => e.src === "account" && e.kind === "deposit" && (!DEVNET || e.owner === owner));
         const dep: AccountEvent = {
           id: uid("dep_"),
           src: "account",
@@ -122,6 +126,7 @@ export const useApp = create<State & Actions>()(
           ts: now,
           txIds,
           first,
+          owner,
           unlockAt: strategy === "fixed" ? addDays(now, STRATEGIES.fixed.lockDays!) : undefined,
         };
         // TODO(backend): agent actions come from the agent log API.
@@ -142,7 +147,7 @@ export const useApp = create<State & Actions>()(
           txCount: 3,
           ts: now + 60_000,
         };
-        set((s) => ({ events: [...s.events, dep, agent], walletUsdc: Math.max(0, s.walletUsdc - amount) }));
+        set((s) => ({ events: [...s.events, dep, ...(withAgent ? [agent] : [])], walletUsdc: Math.max(0, s.walletUsdc - amount) }));
         return dep;
       },
 
@@ -163,6 +168,7 @@ export const useApp = create<State & Actions>()(
           amount,
           ts: now,
           txIds,
+          owner: get().wallet?.address,
         };
         set((s) => ({ events: [...s.events, ev], withdrawals: { ...s.withdrawals, [w.id]: w } }));
         return w;

@@ -24,11 +24,14 @@ export type TxStep = {
   /** "USDC into Flexible" */
   detail: string;
   kind: "setup" | "deposit" | "lock" | "withdraw";
+  /** Runs the step itself (Devnet). Otherwise the driver signs it with signAndSubmit. */
+  run?: (onPhase: (p: "signing" | "submitting") => void, setDetail: (detail: string) => void) => Promise<string>;
 };
 
 export type TxPhase = "pending" | "signing" | "submitting" | "done" | "failed";
 
-export type WalletErrorCode = "USER_REJECTED" | "NOT_AVAILABLE" | "NOT_SUPPORTED" | "TIMEOUT" | "UNKNOWN";
+/** PENDING / UNCONFIRMED / FAILED come from the Devnet flow (devnet/engine.ts). */
+export type WalletErrorCode = "USER_REJECTED" | "NOT_AVAILABLE" | "NOT_SUPPORTED" | "TIMEOUT" | "UNKNOWN" | "PENDING" | "UNCONFIRMED" | "FAILED";
 
 export class WalletError extends Error {
   constructor(
@@ -45,6 +48,8 @@ export function toWalletError(e: unknown): WalletError {
   const msg = e instanceof Error ? e.message : String(e);
   if (/reject|declin|cancel|denied/i.test(msg)) return new WalletError("USER_REJECTED", "You declined the request in your wallet.");
   if (/timed out|timeout/i.test(msg)) return new WalletError("TIMEOUT", "The wallet didn't respond. Try again.");
+  // MWA: the wallet took too long (e.g. sat on its PIN screen) and the local session closed.
+  if (/ConnectionFailedException|websocket/i.test(msg)) return new WalletError("TIMEOUT", "Couldn't reach the wallet. Open it, unlock it, then try again.");
   return new WalletError("UNKNOWN", msg || "Something went wrong.");
 }
 
@@ -56,4 +61,8 @@ export interface WalletDriver {
   disconnect(): Promise<void>;
   /** Resolves with the transaction signature once it has been submitted. */
   signAndSubmit(step: TxStep, onPhase: (p: "signing" | "submitting") => void, walletName: string): Promise<string>;
+  /** Reconnects the wallet if needed, so a later signTransaction opens only the signing prompt. */
+  prepareSigning(): Promise<void>;
+  /** Signs a base64 wire transaction without sending it; resolves with the signed base64 transaction. */
+  signTransaction(txBase64: string): Promise<string>;
 }

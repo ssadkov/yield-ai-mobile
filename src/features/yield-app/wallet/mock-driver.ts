@@ -69,4 +69,8 @@ export const mockDriver: WalletDriver = {
     await wait(1100 + Math.random() * 500);
     return fakeSignature();
   },
+  async prepareSigning() {},
+  async signTransaction() {
+    throw new WalletError("NOT_SUPPORTED", "The mock wallet can't sign real transactions.");
+  },
 };

@@ -4,6 +4,7 @@ import { View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { dayLabel, startOfDay } from "../lib/format";
+import { useLedger } from "../lib/hooks";
 import { useApp, type LedgerEvent } from "../lib/store";
 import { ActivityRow } from "../ui/ActivityRow";
 import { PrimaryButton } from "../ui/Button";
@@ -14,7 +15,7 @@ import { C } from "../ui/theme";
 
 export function ActivityScreen() {
   const insets = useSafeAreaInsets();
-  const events = useApp((s) => s.events);
+  const events = useLedger();
   const walletName = useApp((s) => s.wallet?.name ?? "wallet");
   const [show, setShow] = useState({ account: true, agent: true });
   const [menu, setMenu] = useState(false);

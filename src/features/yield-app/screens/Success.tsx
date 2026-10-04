@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect } from "react";
-import { View } from "react-native";
+import { Linking, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } from "react-native-reanimated";
 import { dayMonthYear, money, pct } from "../lib/format";
 import { useApp, type AccountEvent } from "../lib/store";
@@ -14,6 +14,7 @@ import { toast } from "../ui/Toast";
 import { IconCheck } from "../ui/icons";
 import { C } from "../ui/theme";
 import { useIsMock } from "../wallet";
+import { DEVNET, explorerTx } from "../devnet/config";
 
 /** Pops in like the web version: ring springs from .6, check follows 150ms later. */
 export function PopCheck({ ring, core, children }: { ring: string; core: string; children: React.ReactNode }) {
@@ -56,7 +57,7 @@ export function SuccessScreen() {
             {"Congrats on your\nfirst deposit!"}
           </T>
           <T size={16} lh={1.5} color={C.ink2} center>
-            Your USDC is already earning. The agent takes it from here.
+            {DEVNET ? "Your test USDC is in your Safe on Solana Devnet." : "Your USDC is already earning. The agent takes it from here."}
           </T>
         </View>
       </View>
@@ -73,7 +74,7 @@ export function SuccessScreen() {
             </T>
           </View>
           <T size={16} w={700} color={dep.strategy === "fixed" ? C.navy : C.gain}>
-            {pct(s.apr)} APR
+            {DEVNET ? "Idle" : `${pct(s.apr)} APR`}
           </T>
         </View>
         <View style={{ height: 1, backgroundColor: C.line }} />
@@ -85,18 +86,18 @@ export function SuccessScreen() {
             {money(dep.amount)}
           </T>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+        {!DEVNET && <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
           <T size={14} color={C.ink2}>
             Est. earnings
           </T>
           <T size={15} w={600} tnum color={C.gain} style={{ flexShrink: 1, textAlign: "right" }}>
             {dep.strategy === "fixed" ? `+${whole(gain)} in 100 days` : `+${whole(gain)} a year · +${whole(gain / 12)}/mo`}
           </T>
-        </View>
+        </View>}
         <Tap
           accessibilityRole="link"
           feedback="none"
-          onPress={() => (isMock ? toast("Mock transaction — nothing was sent on-chain") : toast("Signed as a test message — no transaction on-chain yet"))}
+          onPress={() => (DEVNET && dep.txIds[0] ? Linking.openURL(explorerTx(dep.txIds[0])) : isMock ? toast("Mock transaction — nothing was sent on-chain") : toast("Signed as a test message — no transaction on-chain yet"))}
           style={{ alignSelf: "flex-start" }}
         >
           <T size={14} w={600} color={C.blue}>

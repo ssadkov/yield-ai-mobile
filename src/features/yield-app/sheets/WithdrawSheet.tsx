@@ -13,6 +13,8 @@ import { T } from "../ui/Text";
 import { TxFlowView } from "../ui/TxFlowView";
 import { IconAlert } from "../ui/icons";
 import { C } from "../ui/theme";
+import { DEVNET } from "../devnet/config";
+import { devnetWithdrawSteps, signedAmount } from "../devnet/state";
 
 export function WithdrawSheet({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: (w: Withdrawal) => void }) {
   const [locked, setLocked] = useState(false);
@@ -33,13 +35,16 @@ const EXIT = FadeOutLeft.duration(100);
 function WithdrawBody({ onClose, onDone, setLocked }: { onClose: () => void; onDone: (w: Withdrawal) => void; setLocked: (v: boolean) => void }) {
   const wallet = useApp((s) => s.wallet);
   const request = useApp((s) => s.requestWithdrawal);
+  const complete = useApp((s) => s.completeWithdrawal);
   const p = usePortfolio();
   const total = p.flexible;
   const [part, setPart] = useState<number | null>(1);
   const [amount, setAmount] = useState(total);
   const flow = useTxFlow(wallet?.name ?? "your wallet", (sigs) => {
-    const w = request({ amount, txIds: sigs });
-    setTimeout(() => onDone(w), 350);
+    const w = request({ amount: DEVNET ? signedAmount(sigs[0], amount) : amount, txIds: sigs });
+    // On Devnet the transfer is already confirmed on chain.
+    if (DEVNET) complete(w.id);
+    setTimeout(() => onDone(useApp.getState().withdrawals[w.id] ?? w), 350);
   });
   const walletName = wallet?.name ?? "your wallet";
 
@@ -58,7 +63,7 @@ function WithdrawBody({ onClose, onDone, setLocked }: { onClose: () => void; onD
   if (flow.status !== "idle") {
     return (
       <Animated.View key="flow" entering={ENTER_FLOW} exiting={EXIT} style={{ gap: 24 }}>
-        <TxFlowView flow={flow} walletId={wallet?.id} walletName={walletName} onCancel={flow.cancel} doneLabel="Requested" />
+        <TxFlowView flow={flow} walletId={wallet?.id} walletName={walletName} onCancel={flow.cancel} doneLabel={DEVNET ? "Withdrawn" : "Requested"} />
       </Animated.View>
     );
   }
@@ -97,8 +102,14 @@ function WithdrawBody({ onClose, onDone, setLocked }: { onClose: () => void; onD
           <IconAlert size={18} sw={1.8} color={C.ink2} />
         </View>
         <T size={14} lh={1.5} color={C.ink2} style={{ flex: 1 }}>
-          Your USDC comes out of the DeFi protocols and goes straight to your wallet. No lockups.
-          {nextUnlock ? ` Fixed deposits stay locked until ${dayMonthYear(nextUnlock)}.` : ""}
+          {DEVNET ? (
+            "Idle USDC goes from your Safe straight to your wallet on Solana Devnet. You pay the network fee in devnet SOL."
+          ) : (
+            <>
+              Your USDC comes out of the DeFi protocols and goes straight to your wallet. No lockups.
+              {nextUnlock ? ` Fixed deposits stay locked until ${dayMonthYear(nextUnlock)}.` : ""}
+            </>
+          )}
         </T>
       </View>
 
@@ -106,7 +117,7 @@ function WithdrawBody({ onClose, onDone, setLocked }: { onClose: () => void; onD
         <T size={13} color={C.ink3} center>
           One signature with {walletName}
         </T>
-        <PrimaryButton variant="black" onPress={() => flow.start(withdrawPlan(amount))} disabled={!can}>
+        <PrimaryButton variant="black" onPress={() => flow.start(DEVNET ? devnetWithdrawSteps(amount, part === 1) : withdrawPlan(amount))} disabled={!can}>
           {amount > 0 ? `Withdraw ${money(amount)}` : "Enter an amount"}
         </PrimaryButton>
       </View>

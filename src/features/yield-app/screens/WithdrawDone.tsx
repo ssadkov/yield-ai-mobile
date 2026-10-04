@@ -11,6 +11,7 @@ import { haptic } from "../ui/haptics";
 import { IconCheck, IconClock } from "../ui/icons";
 import { C } from "../ui/theme";
 import { PopCheck } from "./Success";
+import { DEVNET } from "../devnet/config";
 
 type Status = "received" | "withdrawing" | "sent";
 
@@ -67,7 +68,7 @@ export function WithdrawDoneScreen() {
 
   const steps: Step[] = [
     { title: "Request received", sub: `${dayLabel(w.requestedAt)}, ${clock(w.requestedAt)}`, state: "done" },
-    { title: "Withdrawing from protocols", sub: status === "received" || status === null ? "Starting…" : sent ? "Done" : "In progress", state: sent ? "done" : "active" },
+    { title: DEVNET ? "Confirmed on Solana Devnet" : "Withdrawing from protocols", sub: status === "received" || status === null ? "Starting…" : sent ? "Done" : "In progress", state: sent ? "done" : "active" },
     {
       title: "Sent to your wallet",
       sub: sent ? `${dayLabel(w.completedAt ?? Date.now())}, ${clock(w.completedAt ?? Date.now())}` : "Usually within 10–60 min",

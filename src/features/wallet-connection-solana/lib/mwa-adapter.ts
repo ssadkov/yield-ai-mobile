@@ -92,6 +92,28 @@ export class MwaAdapter implements SolanaWalletAdapter {
     }
   }
 
+  /**
+   * Re-authorizes inside a session before signing. Wallets rotate auth_token (Solflare stops
+   * accepting an old one after a few uses), so keep the new token, and if the saved one is
+   * rejected, authorize afresh — but only for the same account.
+   */
+  private async reauthorize(wallet: any): Promise<void> {
+    let auth: any;
+    try {
+      auth = await wallet.authorize(this.authorizeParams);
+    } catch (error) {
+      if (!this.authToken) throw error;
+      this.authToken = null;
+      auth = await wallet.authorize(this.authorizeParams);
+    }
+    if (typeof auth?.auth_token === "string") this.authToken = auth.auth_token;
+    const raw = auth?.accounts?.[0]?.address;
+    if (raw && this.connectedAddress) {
+      const address = typeof raw === "string" ? bs58.encode(Buffer.from(raw, "base64")) : bs58.encode(raw);
+      if (address !== this.connectedAddress) throw new Error("The wallet switched to a different account. Reconnect it.");
+    }
+  }
+
   async connect(): Promise<{ address: string; chain: string }> {
     const result = await this.transact("connect.authorize", async (wallet: any) => {
       const auth = await wallet.authorize(this.authorizeParams);
@@ -159,7 +181,7 @@ export class MwaAdapter implements SolanaWalletAdapter {
     if (!this.authToken) throw new Error("Wallet not connected");
 
     const result = await this.transact("signAndSendTransaction", async (wallet: any) => {
-      await wallet.authorize(this.authorizeParams);
+      await this.reauthorize(wallet);
       return await wallet.signAndSendTransactions({
         payloads: [Buffer.from(transaction).toString("base64")],
       });
@@ -176,7 +198,7 @@ export class MwaAdapter implements SolanaWalletAdapter {
     if (!this.authToken) throw new Error("Wallet not connected");
 
     const result = await this.transact("signTransaction", async (wallet: any) => {
-      await wallet.authorize(this.authorizeParams);
+      await this.reauthorize(wallet);
       return await wallet.signTransactions({
         payloads: [Buffer.from(transaction).toString("base64")],
       });
@@ -194,7 +216,7 @@ export class MwaAdapter implements SolanaWalletAdapter {
     if (!this.connectedAddressBase64) throw new Error("Wallet address not available");
 
     const result = await this.transact("signMessage", async (wallet: any) => {
-      await wallet.authorize(this.authorizeParams);
+      await this.reauthorize(wallet);
       return await wallet.signMessages({
         addresses: [this.connectedAddressBase64],
         payloads: [Buffer.from(message).toString("base64")],

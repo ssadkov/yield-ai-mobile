@@ -52,8 +52,11 @@ export function useTxFlow(walletName: string, onDone: (signatures: string[]) => 
             next[i] = p;
             return next;
           });
+        const setDetail = (detail: string) =>
+          setSteps((prev) => prev.map((s, k) => (k === i ? { ...s, detail } : s)));
         try {
-          const sig = await getDriver().signAndSubmit(plan[i], setPhase, walletName);
+          const step = plan[i];
+          const sig = step.run ? await step.run(setPhase, setDetail) : await getDriver().signAndSubmit(step, setPhase, walletName);
           if (cancelled.current) return null;
           sigs.current[i] = sig;
           setPhase("done");

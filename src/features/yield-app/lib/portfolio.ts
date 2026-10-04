@@ -36,7 +36,8 @@ function wobble(day: number) {
   return 0.8 + 0.4 * (x - Math.floor(x));
 }
 
-export function computePortfolio(events: LedgerEvent[], now = Date.now()): Portfolio {
+export function computePortfolio(events: LedgerEvent[], now = Date.now(), opts: { accrue?: boolean } = {}): Portfolio {
+  const accrue = opts.accrue ?? true;
   const account = events
     .filter((e): e is AccountEvent => e.src === "account")
     .sort((a, b) => a.ts - b.ts);
@@ -57,11 +58,11 @@ export function computePortfolio(events: LedgerEvent[], now = Date.now()): Portf
     const day = addDays(start, d);
     const next = addDays(start, d + 1);
     // Earnings accrue on the balance held at the start of the day.
-    const eFlex = flex * (flexApr / 365) * wobble(day);
+    const eFlex = accrue ? flex * (flexApr / 365) * wobble(day) : 0;
     let eFixed = 0;
     for (const p of fixed) {
       if (day < p.unlockAt) {
-        const e = p.amount * (fixedApr / 365);
+        const e = accrue ? p.amount * (fixedApr / 365) : 0;
         p.earned += e;
         eFixed += e;
       }

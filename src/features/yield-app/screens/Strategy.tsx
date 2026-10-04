@@ -15,11 +15,12 @@ import { StrategyPickCard } from "../ui/StrategyCard";
 import { T } from "../ui/Text";
 import { toast } from "../ui/Toast";
 import { C } from "../ui/theme";
+import { DEVNET } from "../devnet/config";
 
 export function StrategyScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ s?: string }>();
-  const [sel, setSel] = useState<StrategyId>(params.s === "fixed" ? "fixed" : "flexible");
+  const [sel, setSel] = useState<StrategyId>(params.s === "fixed" && !DEVNET ? "fixed" : "flexible");
   const [amount, setAmount] = useState(1000);
   const [sheet, setSheet] = useState<"connect" | "deposit" | null>(null);
   const flex = sel === "flexible";
@@ -65,7 +66,7 @@ export function StrategyScreen() {
           </T>
         </View>
         <StrategyPickCard id="flexible" selected={flex} onSelect={() => setSel("flexible")} description="Withdraw any time. The agent keeps your USDC in the best-paying protocols." />
-        <StrategyPickCard id="fixed" selected={!flex} onSelect={() => setSel("fixed")} description={`Your USDC is locked until ${dayMonthYear(unlock)}. The rate won't change.`} />
+        {!DEVNET && <StrategyPickCard id="fixed" selected={!flex} onSelect={() => setSel("fixed")} description={`Your USDC is locked until ${dayMonthYear(unlock)}. The rate won't change.`} />}
         <View style={{ marginVertical: 10, flexDirection: "row", alignItems: "center", gap: 12 }} importantForAccessibility="no-hide-descendants">
           <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
           <T size={12} w={600} tracking={0.08} color={C.mute}>

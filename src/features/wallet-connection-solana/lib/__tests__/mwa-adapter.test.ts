@@ -147,3 +147,52 @@ describe("MwaAdapter", () => {
     expect(mockTransact).toHaveBeenNthCalledWith(2, expect.any(Function));
   });
 });
+
+describe("MwaAdapter re-authorization", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const account = { address: new Uint8Array([1, 2, 3]) };
+
+  it("keeps the rotated auth token for the next request", async () => {
+    let n = 0;
+    const authorize = jest.fn(async () => ({ auth_token: `token-${++n}`, accounts: [account] }));
+    const signTransactions = jest.fn().mockResolvedValue({ signed_payloads: ["signed"] });
+    mockTransact.mockImplementation(async (callback: any) => callback({ authorize, signTransactions }));
+
+    const adapter = new MwaAdapter(config);
+    await adapter.connect();
+    await adapter.signTransaction(new Uint8Array([1]));
+    await adapter.signTransaction(new Uint8Array([2]));
+
+    expect((authorize.mock.calls as any[]).map((c) => c[0].auth_token)).toEqual([undefined, "token-1", "token-2"]);
+  });
+
+  it("authorizes afresh in the same session when the wallet rejects the saved token", async () => {
+    const authorize = jest
+      .fn()
+      .mockResolvedValueOnce({ auth_token: "old", accounts: [account] })
+      .mockRejectedValueOnce(new Error("-1/authorization request failed"))
+      .mockResolvedValueOnce({ auth_token: "new", accounts: [account] });
+    const signTransactions = jest.fn().mockResolvedValue({ signed_payloads: ["signed"] });
+    mockTransact.mockImplementation(async (callback: any) => callback({ authorize, signTransactions }));
+
+    const adapter = new MwaAdapter(config);
+    await adapter.connect();
+    await expect(adapter.signTransaction(new Uint8Array([1]))).resolves.toBe("signed");
+    expect(authorize.mock.calls[2][0].auth_token).toBeUndefined();
+  });
+
+  it("refuses to sign if the wallet answers with another account", async () => {
+    const authorize = jest
+      .fn()
+      .mockResolvedValueOnce({ auth_token: "a", accounts: [account] })
+      .mockResolvedValueOnce({ auth_token: "b", accounts: [{ address: new Uint8Array([9, 9, 9]) }] });
+    const signTransactions = jest.fn().mockResolvedValue({ signed_payloads: ["signed"] });
+    mockTransact.mockImplementation(async (callback: any) => callback({ authorize, signTransactions }));
+
+    const adapter = new MwaAdapter(config);
+    await adapter.connect();
+    await expect(adapter.signTransaction(new Uint8Array([1]))).rejects.toThrow("different account");
+    expect(signTransactions).not.toHaveBeenCalled();
+  });
+});

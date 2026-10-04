@@ -64,7 +64,7 @@ export function StrategyPickCard({ id, selected, onSelect, description }: { id: 
 }
 
 /** Product row on Home. */
-export function ProductCard({ id, amount, apr, sub }: { id: StrategyId; amount: string; apr: number; sub: string }) {
+export function ProductCard({ id, amount, apr, sub, rate }: { id: StrategyId; amount: string; apr: number; sub: string; rate?: string }) {
   const s = STRATEGIES[id];
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 20, backgroundColor: C.surface, paddingHorizontal: 16, paddingVertical: 12 }}>
@@ -82,7 +82,7 @@ export function ProductCard({ id, amount, apr, sub }: { id: StrategyId; amount: 
           {amount}
         </T>
         <T size={13} w={600} color={id === "flexible" ? C.gain : C.navy}>
-          {pct(apr)} {id === "fixed" ? "fixed" : "APR"}
+          {rate ?? `${pct(apr)} ${id === "fixed" ? "fixed" : "APR"}`}
         </T>
       </View>
     </View>

@@ -30,6 +30,17 @@
       "ios": {
         "resourceClass": "m-medium"
       }
+    },
+    "devnet": {
+      "distribution": "internal",
+      "channel": "devnet",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_MAIN_WEBVIEW_URL": "https://yieldai.app/",
+        "EXPO_PUBLIC_YIELD_NETWORK": "devnet"
+      }
     }
   },
   "submit": {
