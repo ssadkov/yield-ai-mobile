@@ -14,7 +14,9 @@ import type { SolanaCluster, SolanaWalletConfig } from "@/features/wallet-connec
 import type { AptosWalletConfig, AptosNetwork } from "@/features/wallet-connection-aptos";
 import { createDeeplinkHandler } from "../lib/deeplink-handler";
 
-const APP_SCHEME = "yieldaimobile";
+// A second build on the same phone (e.g. Devnet next to Mainnet) needs its own scheme, or wallet
+// deeplink callbacks would ask which app to open. Must match the native intent filter.
+const APP_SCHEME = process.env.EXPO_PUBLIC_APP_SCHEME?.trim() || "yieldaimobile";
 const APP_NAME = "YieldAI";
 
 function buildSolanaConfig(

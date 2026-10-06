@@ -6,26 +6,36 @@ import { Tap } from "../ui/Tap";
 import { T } from "../ui/Text";
 import { IconAlert, Spinner } from "../ui/icons";
 import { C } from "../ui/theme";
-import { explorerTx } from "./config";
+import { NET, explorerTx } from "./config";
 import { reconcile } from "./engine";
 import { updateEntry, useOpenEntry, type JournalEntry } from "./journal";
 import { refreshSafe, useSafe } from "./state";
 
-const OP: Record<JournalEntry["op"], string> = { create: "deposit", deposit: "deposit", withdraw: "withdrawal" };
+const OP: Record<JournalEntry["op"], string> = {
+  create: "Safe setup",
+  deposit: "deposit",
+  withdraw: "withdrawal",
+  kamino_deposit: "deposit",
+  kamino_redeem: "withdrawal",
+  kamino_return: "withdrawal",
+  exponent_setup: "fixed-rate setup",
+  exponent_buy: "fixed-rate deposit",
+  exponent_sell: "fixed-rate withdrawal",
+};
 
 /**
  * Home banner for a transaction that isn't settled yet (still confirming, or the result is
  * unknown after the blockhash expired). New deposits and withdrawals wait for it.
  */
-/** True when DevnetBanner has something to show. */
-export function useDevnetBannerVisible() {
+/** True when ChainBanner has something to show. */
+export function useChainBannerVisible() {
   const owner = useApp((s) => s.wallet?.address);
   const open = useOpenEntry(owner);
   const apiError = useSafe((s) => (s.safe ? null : s.error));
   return !!open || !!apiError;
 }
 
-export function DevnetBanner() {
+export function ChainBanner() {
   const owner = useApp((s) => s.wallet?.address);
   const open = useOpenEntry(owner);
   const apiError = useSafe((s) => (s.safe ? null : s.error));
@@ -36,14 +46,14 @@ export function DevnetBanner() {
     return (
       <Box tone="danger">
         <T size={14} lh={1.45} color={C.danger} style={{ flex: 1 }}>
-          Can&apos;t load your Devnet balance. {apiError}
+          Can&apos;t load your balance. {apiError}
         </T>
         <Action label="Retry" onPress={() => refreshSafe()} />
       </Box>
     );
   }
 
-  const what = `${OP[open.op]} of ${open.amount === "all" ? "all idle USDC" : moneyAuto(open.amountUsd)}`;
+  const what = open.amount === "all" ? `${OP[open.op]} of all idle USDC` : open.amountUsd > 0 ? `${OP[open.op]} of ${moneyAuto(open.amountUsd)}` : OP[open.op];
   const check = async () => {
     if (checking) return;
     setChecking(true);
@@ -57,7 +67,7 @@ export function DevnetBanner() {
       <Box tone="info">
         <Spinner size={16} color={C.blue} />
         <T size={14} lh={1.45} color={C.ink2} style={{ flex: 1 }}>
-          Confirming your {what} on Solana Devnet…
+          Confirming your {what} on {NET.label}…
         </T>
         <Action label="View" onPress={() => Linking.openURL(explorerTx(open.signature))} />
         {!checking && <Action label="Check" onPress={check} />}

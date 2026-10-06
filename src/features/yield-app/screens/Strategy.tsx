@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
-import { addDays, dayMonth, dayMonthYear, money, moneyAuto } from "../lib/format";
+import { addDays, dayMonth, dayMonthYear, money, moneyAuto, pct } from "../lib/format";
 import { useApp } from "../lib/store";
 import { STRATEGIES, strategyGain, type StrategyId } from "../lib/strategies";
 import { ConnectSheet } from "../sheets/ConnectSheet";
@@ -15,7 +15,8 @@ import { StrategyPickCard } from "../ui/StrategyCard";
 import { T } from "../ui/Text";
 import { toast } from "../ui/Toast";
 import { C } from "../ui/theme";
-import { DEVNET } from "../devnet/config";
+import { DEVNET, MAINNET } from "../chain/config";
+import { FIXED_UNTIL, useFixedYield, useStrategy } from "../chain/state";
 
 export function StrategyScreen() {
   const router = useRouter();
@@ -25,10 +26,23 @@ export function StrategyScreen() {
   const [sheet, setSheet] = useState<"connect" | "deposit" | null>(null);
   const flex = sel === "flexible";
 
+  const live = useStrategy(sel);
+  const fixedYield = useFixedYield();
   const unlock = addDays(Date.now(), STRATEGIES.fixed.lockDays!);
-  const gain = strategyGain(sel, amount);
+  // Mainnet Fixed: Exponent's projected net USDC at maturity for 100 USDC, scaled to the example amount.
+  const gain = MAINNET ? (flex ? amount * live.apr : fixedYield.netPerUsdc !== null ? amount * (fixedYield.netPerUsdc - 1) : NaN) : strategyGain(sel, amount);
   const whole = (n: number) => money(Math.round(n), { cents: false });
-  const gainNote = flex ? `a year · ${whole(gain / 12)}/mo` : `in 100 days · ${whole(amount + gain)} on ${dayMonth(unlock)}`;
+  const gainNote = MAINNET
+    ? flex
+      ? Number.isFinite(gain)
+        ? `a year · ${whole(gain / 12)}/mo at today's rate`
+        : "Kamino's rate is unavailable right now"
+      : Number.isFinite(gain)
+        ? `by ${FIXED_UNTIL} · about ${pct(fixedYield.apy ?? NaN)} APY. Final rate is quoted when you sign.`
+        : `Your fixed rate is quoted when you sign. Held until ${FIXED_UNTIL}.`
+    : flex
+      ? `a year · ${whole(gain / 12)}/mo`
+      : `in 100 days · ${whole(amount + gain)} on ${dayMonth(unlock)}`;
 
   const onContinue = () => setSheet(useApp.getState().wallet ? "deposit" : "connect");
 
@@ -65,8 +79,20 @@ export function StrategyScreen() {
             STRATEGIES BY YIELD AI
           </T>
         </View>
-        <StrategyPickCard id="flexible" selected={flex} onSelect={() => setSel("flexible")} description="Withdraw any time. The agent keeps your USDC in the best-paying protocols." />
-        {!DEVNET && <StrategyPickCard id="fixed" selected={!flex} onSelect={() => setSel("fixed")} description={`Your USDC is locked until ${dayMonthYear(unlock)}. The rate won't change.`} />}
+        <StrategyPickCard
+          id="flexible"
+          selected={flex}
+          onSelect={() => setSel("flexible")}
+          description={MAINNET ? "Withdraw any time. Your USDC earns in Kamino through your own Safe." : "Withdraw any time. The agent keeps your USDC in the best-paying protocols."}
+        />
+        {!DEVNET && (
+          <StrategyPickCard
+            id="fixed"
+            selected={!flex}
+            onSelect={() => setSel("fixed")}
+            description={MAINNET ? `Your rate is fixed until ${FIXED_UNTIL}. Leaving early sells at the market price.` : `Your USDC is locked until ${dayMonthYear(unlock)}. The rate won't change.`}
+          />
+        )}
         <View style={{ marginVertical: 10, flexDirection: "row", alignItems: "center", gap: 12 }} importantForAccessibility="no-hide-descendants">
           <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
           <T size={12} w={600} tracking={0.08} color={C.mute}>
@@ -114,9 +140,11 @@ export function StrategyScreen() {
           />
         </View>
         <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8 }} accessibilityLiveRegion="polite">
-          <T size={32} w={700} tracking={-0.03} tnum color={C.gain}>
-            +{whole(gain)}
-          </T>
+          {Number.isFinite(gain) && (
+            <T size={32} w={700} tracking={-0.03} tnum color={C.gain}>
+              +{whole(gain)}
+            </T>
+          )}
           <T size={14} color={C.ink2} style={{ flexShrink: 1, textAlign: "right" }}>
             {gainNote}
           </T>
@@ -124,9 +152,11 @@ export function StrategyScreen() {
       </View>
 
       <View style={{ gap: 10 }}>
-        <PrimaryButton onPress={onContinue}>{flex ? "Continue with Flexible" : "Lock for 100 days"}</PrimaryButton>
+        <PrimaryButton onPress={onContinue}>{flex ? "Continue with Flexible" : MAINNET ? `Lock until ${FIXED_UNTIL}` : "Lock for 100 days"}</PrimaryButton>
         <T size={11} lh={1.45} color={C.ink4} center>
-          Flexible APR is variable. Fixed APR is locked at deposit. Not a guarantee; DeFi protocol risk applies.
+          {MAINNET
+            ? "Flexible APY is variable. Fixed APR is an estimate until you sign, then locked to maturity. Not a guarantee; DeFi protocol risk applies."
+            : "Flexible APR is variable. Fixed APR is locked at deposit. Not a guarantee; DeFi protocol risk applies."}
         </T>
       </View>
     </Screen>

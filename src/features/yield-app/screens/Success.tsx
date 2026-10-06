@@ -14,7 +14,8 @@ import { toast } from "../ui/Toast";
 import { IconCheck } from "../ui/icons";
 import { C } from "../ui/theme";
 import { useIsMock } from "../wallet";
-import { DEVNET, explorerTx } from "../devnet/config";
+import { DEVNET, LIVE, MAINNET, NET, explorerTx } from "../chain/config";
+import { FIXED_UNTIL, useStrategy } from "../chain/state";
 
 /** Pops in like the web version: ring springs from .6, check follows 150ms later. */
 export function PopCheck({ ring, core, children }: { ring: string; core: string; children: React.ReactNode }) {
@@ -40,6 +41,7 @@ export function SuccessScreen() {
   const { d } = useLocalSearchParams<{ d: string }>();
   const isMock = useIsMock();
   const dep = useApp((s) => s.events.find((e): e is AccountEvent => e.id === d && e.src === "account"));
+  const live = useStrategy(dep?.strategy ?? "flexible");
   if (!dep) return <Redirect href="/home" />;
 
   const s = STRATEGIES[dep.strategy];
@@ -57,7 +59,13 @@ export function SuccessScreen() {
             {"Congrats on your\nfirst deposit!"}
           </T>
           <T size={16} lh={1.5} color={C.ink2} center>
-            {DEVNET ? "Your test USDC is in your Safe on Solana Devnet." : "Your USDC is already earning. The agent takes it from here."}
+            {DEVNET
+              ? `Your test USDC is in your Safe on ${NET.label}.`
+              : MAINNET
+                ? dep.strategy === "fixed"
+                  ? `Your USDC is in a fixed-rate position until ${FIXED_UNTIL}.`
+                  : "Your USDC is earning in Kamino through your own Safe."
+                : "Your USDC is already earning. The agent takes it from here."}
           </T>
         </View>
       </View>
@@ -74,7 +82,7 @@ export function SuccessScreen() {
             </T>
           </View>
           <T size={16} w={700} color={dep.strategy === "fixed" ? C.navy : C.gain}>
-            {DEVNET ? "Idle" : `${pct(s.apr)} APR`}
+            {DEVNET ? "Idle" : MAINNET && dep.strategy === "fixed" ? "Fixed" : `${pct(live.apr)} ${MAINNET ? "APY" : "APR"}`}
           </T>
         </View>
         <View style={{ height: 1, backgroundColor: C.line }} />
@@ -86,7 +94,7 @@ export function SuccessScreen() {
             {money(dep.amount)}
           </T>
         </View>
-        {!DEVNET && <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+        {!LIVE && <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
           <T size={14} color={C.ink2}>
             Est. earnings
           </T>
@@ -97,7 +105,7 @@ export function SuccessScreen() {
         <Tap
           accessibilityRole="link"
           feedback="none"
-          onPress={() => (DEVNET && dep.txIds[0] ? Linking.openURL(explorerTx(dep.txIds[0])) : isMock ? toast("Mock transaction — nothing was sent on-chain") : toast("Signed as a test message — no transaction on-chain yet"))}
+          onPress={() => (LIVE && dep.txIds.at(-1) ? Linking.openURL(explorerTx(dep.txIds.at(-1)!)) : isMock ? toast("Mock transaction — nothing was sent on-chain") : toast("Signed as a test message — no transaction on-chain yet"))}
           style={{ alignSelf: "flex-start" }}
         >
           <T size={14} w={600} color={C.blue}>

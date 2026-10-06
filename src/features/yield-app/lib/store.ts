@@ -6,7 +6,7 @@ import type { StrategyId } from "./strategies";
 import { STRATEGIES } from "./strategies";
 import type { WalletId } from "../wallet/types";
 import { addDays, startOfDay } from "./format";
-import { DEVNET } from "../devnet/config";
+import { LIVE } from "../chain/config";
 
 export type ConnectedWallet = { id: WalletId; name: string; address: string };
 
@@ -21,7 +21,7 @@ export type AccountEvent = {
   first?: boolean;
   /** Fixed deposits only */
   unlockAt?: number;
-  /** Wallet that made it (Devnet keeps one history per wallet). */
+  /** Wallet that made it (live mode keeps one history per wallet). */
   owner?: string;
 };
 
@@ -116,7 +116,7 @@ export const useApp = create<State & Actions>()(
       recordDeposit: ({ strategy, amount, txIds, agent: withAgent = true }) => {
         const now = Date.now();
         const owner = get().wallet?.address;
-        const first = !get().events.some((e) => e.src === "account" && e.kind === "deposit" && (!DEVNET || e.owner === owner));
+        const first = !get().events.some((e) => e.src === "account" && e.kind === "deposit" && (!LIVE || e.owner === owner));
         const dep: AccountEvent = {
           id: uid("dep_"),
           src: "account",

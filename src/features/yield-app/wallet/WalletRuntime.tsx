@@ -3,8 +3,8 @@ import { WalletService } from "@/core/wallet";
 import { useSolanaDevice } from "@/features/solana-device";
 import { useWalletDiscovery } from "@/features/wallet-discovery";
 import { useWalletRegistry } from "@/features/wallet-gateway";
-import { DEVNET } from "../devnet/config";
-import { useDevnetRuntime } from "../devnet/state";
+import { NET } from "../chain/config";
+import { useChainRuntime } from "../chain/state";
 import { useWalletEnv } from "./native-driver";
 
 /**
@@ -14,9 +14,9 @@ import { useWalletEnv } from "./native-driver";
 export function WalletRuntime() {
   const { wallets } = useWalletDiscovery();
   const { isSolanaPhone, isLoading } = useSolanaDevice();
-  const registry = useWalletRegistry({ wallets, isSolanaPhone, solanaCluster: DEVNET ? "devnet" : "mainnet-beta" });
+  const registry = useWalletRegistry({ wallets, isSolanaPhone, solanaCluster: NET.walletCluster });
   const service = useMemo(() => new WalletService(registry), [registry]);
-  useDevnetRuntime();
+  useChainRuntime();
   const phantomInstalled = wallets.some((w) => w.id === "phantom" && w.isInstalled);
 
   useEffect(() => {

@@ -24,13 +24,13 @@ export type TxStep = {
   /** "USDC into Flexible" */
   detail: string;
   kind: "setup" | "deposit" | "lock" | "withdraw";
-  /** Runs the step itself (Devnet). Otherwise the driver signs it with signAndSubmit. */
+  /** Runs the step itself (real backend, chain/). Otherwise the driver signs it with signAndSubmit. */
   run?: (onPhase: (p: "signing" | "submitting") => void, setDetail: (detail: string) => void) => Promise<string>;
 };
 
 export type TxPhase = "pending" | "signing" | "submitting" | "done" | "failed";
 
-/** PENDING / UNCONFIRMED / FAILED come from the Devnet flow (devnet/engine.ts). */
+/** PENDING / UNCONFIRMED / FAILED come from the real-backend flow (chain/engine.ts). */
 export type WalletErrorCode = "USER_REJECTED" | "NOT_AVAILABLE" | "NOT_SUPPORTED" | "TIMEOUT" | "UNKNOWN" | "PENDING" | "UNCONFIRMED" | "FAILED";
 
 export class WalletError extends Error {

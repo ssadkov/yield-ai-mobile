@@ -41,6 +41,17 @@
         "EXPO_PUBLIC_MAIN_WEBVIEW_URL": "https://yieldai.app/",
         "EXPO_PUBLIC_YIELD_NETWORK": "devnet"
       }
+    },
+    "mainnet": {
+      "distribution": "internal",
+      "channel": "mainnet",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_MAIN_WEBVIEW_URL": "https://yieldai.app/",
+        "EXPO_PUBLIC_YIELD_NETWORK": "mainnet"
+      }
     }
   },
   "submit": {

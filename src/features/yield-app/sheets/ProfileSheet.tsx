@@ -12,9 +12,9 @@ import { toast } from "../ui/Toast";
 import { IconCopy, IconLogout } from "../ui/icons";
 import { C, shadow } from "../ui/theme";
 import { getDriver, useIsMock } from "../wallet";
-import { sol } from "../devnet/api";
-import { DEVNET, FAUCET_SOL, FAUCET_USDC, explorerAddress } from "../devnet/config";
-import { useSafe } from "../devnet/state";
+import { sol } from "../chain/api";
+import { DEVNET, FAUCET_SOL, FAUCET_USDC, LIVE, MAINNET, NET, explorerAddress } from "../chain/config";
+import { ptAmount, useSafe, useSafeBalances } from "../chain/state";
 
 export function ProfileSheet({ open, onClose, onConnect }: { open: boolean; onClose: () => void; onConnect: () => void }) {
   const router = useRouter();
@@ -26,6 +26,7 @@ export function ProfileSheet({ open, onClose, onConnect }: { open: boolean; onCl
   const reset = useApp((s) => s.reset);
   const isMock = useIsMock();
   const safe = useSafe((s) => (s.safe?.owner.address === wallet?.address ? s.safe : null));
+  const balances = useSafeBalances();
 
   return (
     <BottomSheet open={open} onClose={onClose} label="Account" gap={20}>
@@ -78,27 +79,35 @@ export function ProfileSheet({ open, onClose, onConnect }: { open: boolean; onCl
         </Tap>
       )}
 
-      {DEVNET && wallet && (
+      {LIVE && wallet && (
         <View style={{ gap: 10, borderTopWidth: 1, borderColor: C.line, paddingTop: 16 }}>
           <T size={12} w={600} tracking={0.08} color={C.ink3}>
-            SOLANA DEVNET
+            {NET.label.toUpperCase()}
           </T>
-          <Row label="Devnet SOL" value={safe ? sol(safe.walletSolLamports) : "…"} />
-          <Row label="Test USDC in wallet" value={safe ? Number(safe.walletUsdc).toString() : "…"} />
+          <Row label={DEVNET ? "Devnet SOL" : "SOL for fees"} value={safe ? sol(safe.walletSolLamports) : "…"} />
+          <Row label={DEVNET ? "Test USDC in wallet" : "USDC in wallet"} value={safe ? Number(safe.walletUsdc).toString() : "…"} />
           <Row label="Idle USDC in Safe" value={safe ? Number(safe.idleUsdc).toString() : "…"} />
+          {MAINNET && balances && (
+            <>
+              <Row label="In Kamino (deposited)" value={balances.kaminoUsdc.toString()} />
+              <Row label="Fixed-rate PT" value={balances.ptRaw === "0" ? "0" : ptAmount(balances.ptRaw).toFixed(4)} />
+            </>
+          )}
           {safe && (
             <Tap accessibilityRole="link" feedback="none" onPress={() => Linking.openURL(explorerAddress(safe.safe))}>
               <Row label="Safe" value={safe.exists ? shortAddress(safe.safe) : "Created with your first deposit"} link={safe.exists} />
             </Tap>
           )}
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <SmallButton label="Get devnet SOL" onPress={() => Linking.openURL(FAUCET_SOL)} />
-            <SmallButton label="Get test USDC" onPress={() => Linking.openURL(FAUCET_USDC)} />
-          </View>
+          {DEVNET && (
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <SmallButton label="Get devnet SOL" onPress={() => Linking.openURL(FAUCET_SOL)} />
+              <SmallButton label="Get test USDC" onPress={() => Linking.openURL(FAUCET_USDC)} />
+            </View>
+          )}
         </View>
       )}
 
-      {!DEVNET && (
+      {!LIVE && (
       <View style={{ gap: 12, borderTopWidth: 1, borderColor: C.line, paddingTop: 16 }}>
         <T size={12} w={600} tracking={0.08} color={C.ink3}>
           DEMO

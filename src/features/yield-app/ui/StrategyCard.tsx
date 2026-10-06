@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
-import { STRATEGIES, type StrategyId } from "../lib/strategies";
+import type { StrategyId } from "../lib/strategies";
+import { useStrategy } from "../chain/state";
 import { pct } from "../lib/format";
 import { Tap } from "./Tap";
 import { T } from "./Text";
@@ -19,7 +20,7 @@ export function StrategyIcon({ id, size = 44 }: { id: StrategyId; size?: 40 | 44
 
 /** Big selectable card on "Choose a strategy". Selected = outer 3px ring (no layout shift). */
 export function StrategyPickCard({ id, selected, onSelect, description }: { id: StrategyId; selected: boolean; onSelect: () => void; description: ReactNode }) {
-  const s = STRATEGIES[id];
+  const s = useStrategy(id);
   const ring = useAnimatedStyle(() => ({ opacity: withTiming(selected ? 1 : 0, { duration: 200 }) }), [selected]);
   return (
     <Tap
@@ -65,7 +66,7 @@ export function StrategyPickCard({ id, selected, onSelect, description }: { id: 
 
 /** Product row on Home. */
 export function ProductCard({ id, amount, apr, sub, rate }: { id: StrategyId; amount: string; apr: number; sub: string; rate?: string }) {
-  const s = STRATEGIES[id];
+  const s = useStrategy(id);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 20, backgroundColor: C.surface, paddingHorizontal: 16, paddingVertical: 12 }}>
       <StrategyIcon id={id} />
@@ -91,7 +92,7 @@ export function ProductCard({ id, amount, apr, sub, rate }: { id: StrategyId; am
 
 /** Dashed "add a product" row on Home. */
 export function AddProductCard({ id, onPress }: { id: StrategyId; onPress: () => void }) {
-  const s = STRATEGIES[id];
+  const s = useStrategy(id);
   return (
     <Tap
       accessibilityRole="button"
@@ -109,16 +110,22 @@ export function AddProductCard({ id, onPress }: { id: StrategyId; onPress: () =>
         </T>
         {id === "fixed" ? (
           <T size={13} color={C.ink3}>
-            Lock more USDC at{" "}
-            <T size={13} w={600} color={C.navy}>
-              {pct(s.apr)} fixed
-            </T>
+            {Number.isFinite(s.apr) ? (
+              <>
+                Lock more USDC at{" "}
+                <T size={13} w={600} color={C.navy}>
+                  {pct(s.apr)} fixed
+                </T>
+              </>
+            ) : (
+              `Fixed rate ${s.sub.toLowerCase()}`
+            )}
           </T>
         ) : (
           <T size={13} color={C.ink3}>
             Earn{" "}
             <T size={13} w={600} color={C.gain}>
-              {pct(s.apr)} APR
+              {pct(s.apr)} {s.aprLabel}
             </T>
             , withdraw any time
           </T>

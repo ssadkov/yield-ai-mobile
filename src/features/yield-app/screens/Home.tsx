@@ -22,10 +22,10 @@ import { T } from "../ui/Text";
 import { toast } from "../ui/Toast";
 import { IconClock, IconDown, IconInfo, IconTrend, IconUp } from "../ui/icons";
 import { C, shadow } from "../ui/theme";
-import { DEVNET } from "../devnet/config";
-import { DevnetBanner, useDevnetBannerVisible } from "../devnet/DevnetBanner";
-import { useOpenEntry } from "../devnet/journal";
-import { useSafeBalances } from "../devnet/state";
+import { ChainBanner, useChainBannerVisible } from "../chain/ChainBanner";
+import { DEVNET, LIVE, MAINNET, NET } from "../chain/config";
+import { useOpenEntry } from "../chain/journal";
+import { FIXED_UNTIL, useKaminoYield, useSafeBalances } from "../chain/state";
 
 type Sheet = "deposit" | "withdraw" | "connect" | "profile" | null;
 
@@ -48,9 +48,13 @@ export function HomeScreen() {
   const [whole, cents] = splitMoney(p.total);
   const empty = !p.hasPositions;
   const chain = useSafeBalances();
-  // Devnet: no new transfer while an earlier one is unsettled.
-  const busy = !!useOpenEntry(DEVNET ? wallet?.address : undefined);
-  const banner = useDevnetBannerVisible() && DEVNET;
+  // Live: no new transfer while an earlier one is unsettled.
+  const busy = !!useOpenEntry(LIVE ? wallet?.address : undefined);
+  const banner = useChainBannerVisible() && LIVE;
+  const apy = useKaminoYield((s) => s.apy);
+  const flexApr = MAINNET ? (apy ?? NaN) : STRATEGIES.flexible.apr;
+  // Mainnet: a fixed-rate position can be sold before maturity too.
+  const noWithdraw = (p.flexible <= 0 && !(MAINNET && p.fixedTotal > 0)) || busy;
 
   return (
     <Screen
@@ -67,7 +71,7 @@ export function HomeScreen() {
             onDone={(dep) => {
               close();
               if (dep.first) router.push({ pathname: "/success", params: { d: dep.id } });
-              else toast(`Deposited ${moneyAuto(dep.amount)} · ${DEVNET ? "Devnet Safe" : "Flexible"}`);
+              else toast(`Deposited ${moneyAuto(dep.amount)} · ${DEVNET ? "Devnet Safe" : dep.strategy === "fixed" ? "Fixed" : "Flexible"}`);
             }}
           />
           <WithdrawSheet
@@ -103,7 +107,7 @@ export function HomeScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <IconTrend size={18} color={C.mute} />
             <T size={16} w={500} color={C.ink3}>
-              {DEVNET ? "Solana Devnet · idle USDC" : empty ? `Earn ${pct(STRATEGIES.flexible.apr)}` : `Earning ${pct(p.apr)}`}
+              {DEVNET ? `${NET.label} · idle USDC` : empty ? `Earn ${pct(flexApr)}${MAINNET ? " APY" : ""}` : `Earning ${pct(Number.isFinite(p.apr) ? p.apr : flexApr)}${MAINNET ? " APY" : ""}`}
             </T>
             {!DEVNET && <Pressable accessibilityRole="button" accessibilityLabel="About this rate" accessibilityState={{ expanded: info }} hitSlop={14} onPress={() => setInfo((v) => !v)}>
               <IconInfo size={16} color={C.mute} />
@@ -112,7 +116,7 @@ export function HomeScreen() {
               <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={[{ position: "absolute", top: 30, alignSelf: "center", left: "50%", marginLeft: -130, width: 260, borderRadius: 16, backgroundColor: C.white, padding: 12, zIndex: 10 }, shadow.tip]}>
                 <Pressable onPress={() => setInfo(false)} accessibilityRole="text">
                   <T size={13} lh={1.45} color={C.ink2} center>
-                    {empty ? "Flexible APR" : "Your blended APR"} is variable and not a guarantee. It changes with market rates.
+                    {empty ? `Flexible ${MAINNET ? "APY" : "APR"}` : `Your blended ${MAINNET ? "APY" : "APR"}`} is variable and not a guarantee. It changes with market rates.
                   </T>
                 </Pressable>
               </Animated.View>
@@ -126,7 +130,7 @@ export function HomeScreen() {
               {cents}
             </T>
           </View>
-          {DEVNET ? (
+          {LIVE ? (
             <T size={15} color={C.ink4} tnum>
               {!wallet ? "Connect a wallet to start" : chain ? `In your wallet ${money(chain.walletUsdc)} USDC` : "Loading balances…"}
             </T>
@@ -148,7 +152,7 @@ export function HomeScreen() {
         </View>
 
         <View style={{ flex: 1, justifyContent: "center", gap: 18 }}>
-          {banner ? <DevnetBanner /> : <BarChart buckets={buckets} empty={empty} />}
+          {banner ? <ChainBanner /> : <BarChart buckets={buckets} empty={empty} />}
 
           {!empty && !banner && (
             <View accessibilityRole="tablist" style={{ marginTop: -8, flexDirection: "row", justifyContent: "space-between" }}>
@@ -178,13 +182,19 @@ export function HomeScreen() {
       <View style={{ gap: 10 }} accessibilityLabel="Your products">
         {p.flexible > 0 &&
           (DEVNET ? (
-            <ProductCard id="flexible" amount={money(p.flexible)} apr={0} rate="Idle" sub="Safe on Solana Devnet" />
+            <ProductCard id="flexible" amount={money(p.flexible)} apr={0} rate="Idle" sub={`Safe on ${NET.label}`} />
+          ) : MAINNET ? (
+            <ProductCard id="flexible" amount={money(p.flexible)} apr={flexApr} rate={`${pct(flexApr)} APY`} sub="Kamino · withdraw any time" />
           ) : (
             <ProductCard id="flexible" amount={money(p.flexible)} apr={STRATEGIES.flexible.apr} sub="Withdraw any time" />
           ))}
-        {p.fixed.map((f) => (
-          <ProductCard key={f.id} id="fixed" amount={money(f.amount + f.earned)} apr={STRATEGIES.fixed.apr} sub={`Unlocks ${dayMonth(f.unlockAt)}`} />
-        ))}
+        {p.fixed.map((f) =>
+          MAINNET ? (
+            <ProductCard key={f.id} id="fixed" amount={money(f.amount + f.earned)} apr={NaN} rate="Fixed" sub={`Exponent · until ${FIXED_UNTIL}`} />
+          ) : (
+            <ProductCard key={f.id} id="fixed" amount={money(f.amount + f.earned)} apr={STRATEGIES.fixed.apr} sub={`Unlocks ${dayMonth(f.unlockAt)}`} />
+          ),
+        )}
         {p.flexible <= 0 && !DEVNET && <AddProductCard id="flexible" onPress={() => router.push({ pathname: "/strategy", params: { s: "flexible" } })} />}
         {p.fixed.length === 0 && !DEVNET && <AddProductCard id="fixed" onPress={() => router.push({ pathname: "/strategy", params: { s: "fixed" } })} />}
       </View>
@@ -199,9 +209,9 @@ export function HomeScreen() {
           </PrimaryButton>
         </View>
         <View style={{ flex: 1 }}>
-          <PrimaryButton label="Withdraw" variant="light" disabled={p.flexible <= 0 || busy} onPress={() => setSheet("withdraw")}>
-            <IconUp size={20} sw={2.2} color={p.flexible <= 0 || busy ? C.mute : C.ink} />
-            <T size={17} w={600} color={p.flexible <= 0 || busy ? C.mute : C.ink}>
+          <PrimaryButton label="Withdraw" variant="light" disabled={noWithdraw} onPress={() => setSheet("withdraw")}>
+            <IconUp size={20} sw={2.2} color={noWithdraw ? C.mute : C.ink} />
+            <T size={17} w={600} color={noWithdraw ? C.mute : C.ink}>
               Withdraw
             </T>
           </PrimaryButton>

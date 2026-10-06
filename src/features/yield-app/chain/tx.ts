@@ -15,6 +15,8 @@ export type ParsedTx = {
   accountKeys: string[];
   blockhash: string;
   programIds: string[];
+  /** First 8 bytes of each instruction's data, hex (Anchor discriminator for Safe instructions). */
+  tags: string[];
 };
 
 export class TxCheckError extends Error {
@@ -24,12 +26,24 @@ export class TxCheckError extends Error {
   }
 }
 
-const PROGRAMS_ALLOWED = new Set([
-  "ComputeBudget111111111111111111111111111111",
-  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-  "11111111111111111111111111111111",
+/** Top-level programs besides the Safe itself. Kamino/Exponent/Orca run only as Safe CPIs. */
+const PROGRAMS_ALLOWED = new Set(["ComputeBudget111111111111111111111111111111", "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"]);
+
+/** Reviewed Safe instructions, sha256("global:<name>")[0..8]: the same set the API transport accepts. */
+const SAFE_INSTRUCTIONS = new Set([
+  "bf99cf74c74c5128", // initialize_with_limits
+  "f223c68952e1f2b6", // deposit
+  "b712469c946da122", // withdraw
+  "7751160472bb1791", // set_allocation
+  "ed08bcbb73633155", // kamino_deposit
+  "c765292dd562e0c8", // kamino_withdraw
+  "c4c9649eb2d4c058", // init_exponent_position
+  "6316f677cd016021", // exponent_buy_pt
+  "d3e59aaa87a37dc5", // exponent_sell_pt
+  "20031055deef270a", // exponent_redeem_pt
 ]);
+
+const MAX_PACKET = 1232;
 
 function shortVec(b: Uint8Array, at: number): [number, number] {
   let value = 0;
@@ -70,6 +84,7 @@ export function parseTx(bytes: Uint8Array): ParsedTx {
   let nIx: number;
   [nIx, p] = shortVec(message, p);
   const programIds: string[] = [];
+  const tags: string[] = [];
   for (let i = 0; i < nIx; i++) {
     const idx = take(message, p, 1)[0];
     p += 1;
@@ -80,10 +95,11 @@ export function parseTx(bytes: Uint8Array): ParsedTx {
     [n, p] = shortVec(message, p);
     p += n;
     [n, p] = shortVec(message, p);
+    tags.push(Buffer.from(message.subarray(p, p + Math.min(n, 8))).toString("hex"));
     p += n;
   }
   if (p > message.length) throw new TxCheckError("Malformed transaction.");
-  return { signatures, message, version, requiredSignatures: header[0], accountKeys, blockhash, programIds };
+  return { signatures, message, version, requiredSignatures: header[0], accountKeys, blockhash, programIds, tags };
 }
 
 function checkSigner(tx: ParsedTx, owner: string, blockhash: string) {
@@ -92,14 +108,17 @@ function checkSigner(tx: ParsedTx, owner: string, blockhash: string) {
   if (tx.blockhash !== blockhash) throw new TxCheckError("Transaction blockhash doesn't match the plan.");
 }
 
-/** The server's unsigned v0 transaction: your wallet signs and pays, only known programs are called. */
+/** The server's unsigned v0 transaction: your wallet signs and pays, only reviewed Safe instructions run. */
 export function checkUnsigned(bytes: Uint8Array, opts: { owner: string; blockhash: string; programId: string }): ParsedTx {
+  if (bytes.length > MAX_PACKET) throw new TxCheckError("Transaction is larger than a Solana packet.");
   const tx = parseTx(bytes);
   if (tx.version !== 0) throw new TxCheckError("Expected a version 0 transaction.");
   checkSigner(tx, opts.owner, opts.blockhash);
   const unknown = tx.programIds.find((id) => id !== opts.programId && !PROGRAMS_ALLOWED.has(id));
   if (unknown) throw new TxCheckError(`Transaction calls an unexpected program (${unknown.slice(0, 6)}…).`);
   if (!tx.programIds.includes(opts.programId)) throw new TxCheckError("Transaction doesn't call the Yield AI program.");
+  const foreign = tx.programIds.findIndex((id, i) => id === opts.programId && !SAFE_INSTRUCTIONS.has(tx.tags[i]));
+  if (foreign >= 0) throw new TxCheckError("Transaction calls an unreviewed Yield AI instruction.");
   return tx;
 }
 

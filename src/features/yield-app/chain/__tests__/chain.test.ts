@@ -6,10 +6,10 @@ import { EXPECTED_NETWORK } from "../config";
 import { runOperation, type Deps } from "../engine";
 import { openEntry, updateEntry, useJournal } from "../journal";
 import { TxCheckError, checkSigned, checkUnsigned, parseTx } from "../tx";
+import { exponentExit, kaminoReturn, kaminoWithdraw } from "../protocols";
 
 jest.mock("@react-native-async-storage/async-storage", () => require("@react-native-async-storage/async-storage/jest/async-storage-mock"));
 jest.mock("../../wallet", () => ({ ...jest.requireActual("../../wallet/types"), getDriver: jest.fn() }));
-jest.mock("@/features/wallet-connection-solana", () => ({ submitSignedTransaction: jest.fn() }));
 
 /** Real unsigned deposit from the Devnet API (owner 8xwj…, 1 USDC). */
 const FIXTURE_TX =
@@ -123,6 +123,16 @@ function deps(over: Partial<SafeApi> = {}, statuses: TxStatus[] = [status("confi
     depositPlan: jest.fn(async () => ready()),
     withdrawalPlan: jest.fn(async () => ready("0.400000")),
     txStatus: jest.fn(async () => (queue.length > 1 ? queue.shift()! : queue[0])),
+    kaminoYield: jest.fn(),
+    exponentYield: jest.fn(),
+    kaminoPosition: jest.fn(),
+    kaminoDepositPlan: jest.fn(async () => ready("1.000000")),
+    kaminoRedeemPlan: jest.fn(),
+    kaminoReturnPlan: jest.fn(),
+    exponentPosition: jest.fn(async () => ({ state: state(), setupRequired: false, position: null })),
+    exponentSetupPlan: jest.fn(async () => ready("0")),
+    exponentInvestPlan: jest.fn(async () => ready("1.000000")),
+    exponentExitPlan: jest.fn(),
     ...over,
   };
   const d: Deps = {
@@ -220,6 +230,14 @@ describe("runOperation", () => {
     expect(useJournal.getState().entries[0].status).not.toBe("failed");
   });
 
+  it("ignores a block height that can't be real (an RPC reporting the slot)", async () => {
+    // Seen on Mainnet: getBlockHeight answered with the slot, ~22M above lastValidBlockHeight.
+    const d = deps();
+    d.blockHeight = jest.fn(async () => 22_000_000);
+    await expect(runOperation({ kind: "deposit", amountUsd: 1 }, OWNER, hooks(), d)).resolves.toBeTruthy();
+    expect(d.send).toHaveBeenCalled();
+  });
+
   it("doesn't send a transaction that expired while the wallet was open", async () => {
     const d = deps();
     d.blockHeight = jest.fn(async () => 101);
@@ -294,5 +312,84 @@ describe("runOperation", () => {
     const d = deps({}, [status("finalized", { error: { InstructionError: [1, "Custom"] } })]);
     await expect(runOperation({ kind: "deposit", amountUsd: 1 }, OWNER, hooks(), d)).rejects.toThrow("failed on Solana");
     expect(useJournal.getState().entries[0].status).toBe("failed");
+  });
+});
+
+describe("instruction allowlist", () => {
+  it("rejects a Yield AI instruction outside the reviewed set", () => {
+    const b = Buffer.from(FIXTURE_TX, "base64");
+    // The deposit's data starts right after its account list: find its 8-byte tag and change it.
+    const tag = Buffer.from("f223c68952e1f2b6", "hex");
+    const at = b.indexOf(tag);
+    expect(at).toBeGreaterThan(0);
+    b[at] ^= 0xff;
+    expect(() => checkUnsigned(b, { owner: FIXTURE_OWNER, blockhash: FIXTURE_BLOCKHASH, programId: PROGRAM })).toThrow("unreviewed");
+  });
+});
+
+describe("Kamino withdrawal", () => {
+  beforeEach(() => useJournal.setState({ entries: [], loaded: true }));
+
+  /** The fixture with another amount byte, so every leg and return has its own signature. */
+  let variant = 0;
+  const distinct = (p: any) => {
+    const b = unsignedFor();
+    b.set([0x50 + (variant++ % 100)], b.indexOf(Buffer.from([0x40, 0x42, 0x0f, 0x00])));
+    return { ...p, steps: [{ ...p.steps[0], transaction: b.toString("base64") }] };
+  };
+  const redeem = (target: string, leg: string, remaining: string) => distinct({ ...(ready() as any), targetSharesRaw: target, legSharesRaw: leg, remainingTargetSharesRaw: remaining });
+  const ret = (burned: string, net: string) => distinct({ ...(ready(net) as any), burnedSharesRaw: burned, netUsdc: net });
+
+  it("returns each leg's USDC and asks for the remaining raw shares, never the percent again", async () => {
+    const d = deps({
+      kaminoRedeemPlan: jest.fn().mockResolvedValueOnce(redeem("1000", "600", "400")).mockResolvedValueOnce(redeem("400", "400", "0")),
+      kaminoReturnPlan: jest.fn().mockResolvedValueOnce(ret("600", "0.600000")).mockResolvedValueOnce(ret("400", "0.400000")),
+    });
+    const out = await kaminoWithdraw(OWNER, { percent: "50" }, hooks(), d);
+    expect((d.api.kaminoRedeemPlan as jest.Mock).mock.calls.map((c) => c[1])).toEqual([{ percent: "50" }, { shares: "400" }]);
+    expect(d.api.kaminoReturnPlan).toHaveBeenCalledTimes(2);
+    expect(out.usdc).toBeCloseTo(1);
+    expect(out.signatures).toHaveLength(4);
+    expect(d.api.withdrawalPlan).not.toHaveBeenCalled();
+  });
+
+  it("on All redeems every leg, then sweeps idle USDC once", async () => {
+    const d = deps({
+      kaminoRedeemPlan: jest.fn().mockResolvedValueOnce(redeem("1000", "700", "300")).mockResolvedValueOnce(redeem("300", "300", "0")).mockResolvedValueOnce({ status: "redeemed", steps: [] }),
+      withdrawalPlan: jest.fn(async () => ready("1.050000")),
+    });
+    const out = await kaminoWithdraw(OWNER, { all: true }, hooks(), d);
+    expect((d.api.kaminoRedeemPlan as jest.Mock).mock.calls.map((c) => c[1])).toEqual([{ shares: "all" }, { shares: "all" }, { shares: "all" }]);
+    expect(d.api.kaminoReturnPlan).not.toHaveBeenCalled();
+    expect(d.api.withdrawalPlan).toHaveBeenCalledWith(OWNER, "all");
+    expect(out.usdc).toBeCloseTo(1.05);
+  });
+
+  it("never plans a second return for the same redemption", async () => {
+    const d = deps({
+      kaminoRedeemPlan: jest.fn().mockResolvedValueOnce(redeem("1000", "1000", "0")),
+      kaminoReturnPlan: jest.fn().mockResolvedValueOnce(ret("1000", "1.000000")),
+    });
+    await kaminoWithdraw(OWNER, { percent: "100" }, hooks(), d);
+    const redemption = useJournal.getState().entries.find((e) => e.op === "kamino_redeem")!.signature;
+    await expect(kaminoReturn(OWNER, redemption, hooks(), d)).rejects.toMatchObject({ code: "PENDING" });
+    expect(d.api.kaminoReturnPlan).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Exponent exit", () => {
+  beforeEach(() => useJournal.setState({ entries: [], loaded: true }));
+
+  it("doesn't send once the price quote has expired", async () => {
+    const d = deps({ exponentExitPlan: jest.fn(async () => ({ ...(ready() as any), minimumOutputRaw: "990000", quoteExpiresAtUnixSeconds: Date.now() / 1000 - 1 })) });
+    await expect(exponentExit(OWNER, { all: true }, hooks(), d)).rejects.toThrow("quote expired");
+    expect(d.send).not.toHaveBeenCalled();
+  });
+
+  it("sends a fresh quote and reports the guaranteed minimum", async () => {
+    const d = deps({ exponentExitPlan: jest.fn(async () => ({ ...(ready() as any), minimumOutputRaw: "990000", quoteExpiresAtUnixSeconds: Date.now() / 1000 + 60 })) });
+    const out = await exponentExit(OWNER, { percent: "50" }, hooks(), d);
+    expect(d.api.exponentExitPlan).toHaveBeenCalledWith(OWNER, { percent: "50" });
+    expect(out.usdc).toBeCloseTo(0.99);
   });
 });

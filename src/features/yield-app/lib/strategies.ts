@@ -8,7 +8,7 @@ export type Strategy = {
   /** Line under the name on the strategy picker */
   pickerSub: string;
   apr: number;
-  aprLabel: "APR" | "FIXED APR";
+  aprLabel: "APR" | "APY" | "FIXED APR";
   lockDays?: number;
 };
 

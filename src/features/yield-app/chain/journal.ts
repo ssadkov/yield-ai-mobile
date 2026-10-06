@@ -7,7 +7,16 @@ import { create } from "zustand";
  * builds a new transfer while an earlier one is unresolved.
  */
 
-export type OpKind = "create" | "deposit" | "withdraw";
+export type OpKind =
+  | "create"
+  | "deposit"
+  | "withdraw"
+  | "kamino_deposit"
+  | "kamino_redeem"
+  | "kamino_return"
+  | "exponent_setup"
+  | "exponent_buy"
+  | "exponent_sell";
 
 /**
  * signed     — saved, maybe not sent yet
@@ -27,7 +36,9 @@ export type JournalEntry = {
   /** Amount shown in the app */
   amountUsd: number;
   owner: string;
-  cluster: "devnet";
+  cluster: "devnet" | "mainnet";
+  /** kamino_return: the redemption it returns. Never plan a second return for the same one. */
+  returnFor?: string;
   planId: string;
   signature: string;
   /** base64 wire bytes, re-sent unchanged until the blockhash expires */

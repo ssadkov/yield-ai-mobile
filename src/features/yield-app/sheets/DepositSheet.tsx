@@ -13,8 +13,8 @@ import { SideButtonHint, Skeleton } from "../ui/Screen";
 import { T } from "../ui/Text";
 import { TxFlowView, signHint } from "../ui/TxFlowView";
 import { C } from "../ui/theme";
-import { DEVNET } from "../devnet/config";
-import { devnetDepositSteps, signedAmount, useSafeBalances } from "../devnet/state";
+import { DEVNET, KAMINO_MIN_USDC, LIVE, MAINNET, NET } from "../chain/config";
+import { FIXED_UNTIL, liveDepositSteps, signedAmount, useFixedYield, useKaminoYield, useSafeBalances } from "../chain/state";
 
 let balanceLoaded = false;
 /** Mock "fetching wallet balance" on first open. TODO(backend): read the wallet's USDC balance. */
@@ -22,7 +22,7 @@ function useWalletUsdc() {
   const usdc = useApp((s) => s.walletUsdc);
   const chain = useSafeBalances();
   const mock = useMockWalletUsdc(usdc);
-  if (DEVNET) return { usdc: chain?.walletUsdc ?? 0, loading: !chain };
+  if (LIVE) return { usdc: chain?.walletUsdc ?? 0, loading: !chain };
   return mock;
 }
 
@@ -60,9 +60,16 @@ function DepositBody({ strategy, onClose, onDone, setLocked }: { strategy: Strat
   const events = useApp((s) => s.events);
   const recordDeposit = useApp((s) => s.recordDeposit);
   const { usdc, loading } = useWalletUsdc();
-  const [amount, setAmount] = useState(() => (DEVNET ? 1 : Math.min(1000, usdc || 1000)));
+  const [amount, setAmount] = useState(() => (LIVE ? 1 : Math.min(1000, usdc || 1000)));
+  const kaminoApy = useKaminoYield((s) => s.apy);
+  const fixedApr = useFixedYield((s) => s.apr);
+  // Devnet has only idle USDC; Mainnet Flexible is Kamino, Fixed is the Exponent PT.
+  const liveStrategy: StrategyId = MAINNET ? strategy : "flexible";
   const flow = useTxFlow(wallet?.name ?? "your wallet", (sigs) => {
-    const dep = DEVNET ? recordDeposit({ strategy: "flexible", amount: signedAmount(sigs[0], amount), txIds: sigs, agent: false }) : recordDeposit({ strategy, amount, txIds: sigs });
+    const last = sigs.filter(Boolean).at(-1);
+    const dep = LIVE
+      ? recordDeposit({ strategy: liveStrategy, amount: signedAmount(last, amount), txIds: sigs.filter(Boolean), agent: false })
+      : recordDeposit({ strategy, amount, txIds: sigs });
     setTimeout(() => onDone(dep), 450);
   });
   const s = STRATEGIES[strategy];
@@ -75,7 +82,9 @@ function DepositBody({ strategy, onClose, onDone, setLocked }: { strategy: Strat
 
   const tooMuch = !loading && amount > usdc + 1e-9;
   const noFunds = !loading && usdc <= 0;
-  const canDeposit = !loading && amount > 0 && !tooMuch;
+  // Kamino's vault takes at least 1 USDC; the fixed-rate route uses the same floor.
+  const belowMin = MAINNET && amount > 0 && amount < KAMINO_MIN_USDC;
+  const canDeposit = !loading && amount > 0 && !tooMuch && !belowMin;
 
   const gain = strategyGain(strategy, amount);
   const whole = money(Math.round(gain), { cents: false });
@@ -100,6 +109,10 @@ function DepositBody({ strategy, onClose, onDone, setLocked }: { strategy: Strat
           <T size={14} color={C.danger}>
             No USDC in your wallet yet
           </T>
+        ) : belowMin ? (
+          <T size={14} color={C.danger}>
+            Minimum {moneyAuto(KAMINO_MIN_USDC)}
+          </T>
         ) : tooMuch ? (
           <T size={14} color={C.danger}>
             Not enough USDC · in wallet {money(usdc)}
@@ -116,8 +129,14 @@ function DepositBody({ strategy, onClose, onDone, setLocked }: { strategy: Strat
         value={amount}
         onChange={setAmount}
         chips={[
-          ...(DEVNET
-            ? [
+          ...(LIVE
+            ? MAINNET
+              ? [
+                  { value: 1, label: "$1" },
+                  { value: 5, label: "$5" },
+                  { value: 10, label: "$10" },
+                ]
+              : [
                 { value: 0.5, label: "$0.50" },
                 { value: 1, label: "$1" },
                 { value: 2, label: "$2" },
@@ -134,7 +153,24 @@ function DepositBody({ strategy, onClose, onDone, setLocked }: { strategy: Strat
       {DEVNET ? (
         <View style={{ borderRadius: 18, backgroundColor: C.surface, padding: 16 }}>
           <T size={14} lh={1.5} color={C.ink2}>
-            Test USDC goes into your Safe on Solana Devnet and stays idle. You pay the network fee in devnet SOL.
+            Test USDC goes into your Safe on {NET.label} and stays idle. You pay the network fee in devnet SOL.
+          </T>
+        </View>
+      ) : MAINNET ? (
+        <View style={{ gap: 6, borderRadius: 18, backgroundColor: C.surface, padding: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: strategy === "fixed" ? C.navy : C.gain }} />
+            <T size={15} w={600} numberOfLines={1}>
+              {strategy === "fixed"
+                ? `Fixed until ${FIXED_UNTIL}${fixedApr !== null ? ` · about ${pct(fixedApr)} APR` : ""}`
+                : `Flexible · ${kaminoApy !== null ? `${pct(kaminoApy)} APY` : "APY unavailable"}`}
+            </T>
+          </View>
+          <T size={13} lh={1.45} color={C.ink3}>
+            {strategy === "fixed"
+              ? "The exact rate for your amount is quoted when you sign. Withdrawing before maturity sells at the market price."
+              : "Your USDC goes to Kamino through your own Safe. The rate is variable, not a guarantee."}{" "}
+            You pay the network fee in SOL.
           </T>
         </View>
       ) : (
@@ -157,7 +193,7 @@ function DepositBody({ strategy, onClose, onDone, setLocked }: { strategy: Strat
 
       <View style={{ gap: 14 }}>
         <SideButtonHint text={wallet?.id === "seed-vault" || !wallet ? "Then double-tap the side button to sign" : signHint(wallet.id, wallet.name)} />
-        <PrimaryButton onPress={() => flow.start(DEVNET ? devnetDepositSteps(amount) : depositPlan(strategy, amount, isFirst))} disabled={!canDeposit}>
+        <PrimaryButton onPress={() => flow.start(LIVE ? liveDepositSteps(liveStrategy, amount) : depositPlan(strategy, amount, isFirst))} disabled={!canDeposit}>
           {amount > 0 ? `Deposit ${moneyAuto(amount)}` : "Enter an amount"}
         </PrimaryButton>
       </View>

@@ -31,7 +31,7 @@ export type Cost = {
 
 export type PlanStep = { id: string; kind: string; title: string; transaction: string; transactionVersion?: number; requiredSigners?: string[] };
 
-export type ReadyPlan = {
+export type ReadyPlan = Partial<KaminoRedeemFields & KaminoReturnFields> & ExponentQuoteFields & {
   status: "ready";
   planId: string;
   state: SafeState;
@@ -46,7 +46,43 @@ export type ReadyPlan = {
   initialDepositUsdc?: string;
 };
 
-export type PlanResponse = ReadyPlan | { status: "already_exists" | "empty"; state: SafeState; steps: [] };
+export type PlanResponse =
+  | ReadyPlan
+  | { status: "already_exists" | "empty" | "redeemed" | "setup_required"; state?: SafeState; steps: []; burnedSharesRaw?: string; netUsdc?: string };
+
+/** Kamino redemption leg (phase redeem). */
+export type KaminoRedeemFields = { targetSharesRaw: string; legSharesRaw: string; remainingTargetSharesRaw: string };
+/** Kamino return of redeemed USDC (phase return). */
+export type KaminoReturnFields = { burnedSharesRaw: string; netUsdc: string; redemptionSignature: string };
+/** Exponent buy/sell quote. */
+export type ExponentQuoteFields = {
+  quoteExpiresAtUnixSeconds?: number;
+  minimumOutputRaw?: string;
+  quote?: { maturityPreview?: { netApyAfterCurrentDexAndFutureProfitFee?: string; projectedNetUsdc?: string } | null; output?: { expectedRaw: string; minRaw: string } };
+};
+
+/** Indicative fixed rate for a 100 USDC buy, no wallet needed. Before signing use the amount's own quote. */
+export type ExponentYield = {
+  status: string;
+  aprRatio: string;
+  apyRatio: string;
+  projectedNetUsdc: string;
+  referenceAmountUsdc: string;
+  maturity: string;
+  fetchedAt: number;
+  expiresAt: number;
+};
+export type KaminoYield = { status: string; apyRatio: string; apyPercent: string; fetchedAt: number; expiresAt: number; name: string };
+export type KaminoPosition = { state: SafeState; sharesRaw: string; sharesDecimals: number; principalUsdc: string };
+export type ExponentPosition = {
+  state: SafeState;
+  setupRequired: boolean;
+  position: { trackedPt: string; principalUsdc: string; maturity: number } | null;
+  marketInfo?: { executionReady?: boolean; maturity?: string; reason?: string | null };
+};
+
+/** Either a percent of the position ("25") or raw shares ("123" or "all"). */
+export type PositionSelection = { percent: string } | { shares: string };
 
 export type TxStatusValue = "pending" | "processed" | "confirmed" | "finalized" | "failed" | "unknown_or_expired";
 
@@ -73,7 +109,8 @@ export class SafeApiError extends Error {
   }
 }
 
-const TIMEOUT_MS = 20_000;
+// Protocol plans call Kamino/Orca upstream and can take a while.
+const TIMEOUT_MS = 45_000;
 
 async function request<T>(path: string, body?: unknown): Promise<T> {
   const ctrl = new AbortController();
@@ -119,6 +156,23 @@ export const safeApi = {
     request<PlanResponse>("/safes/creation-plan", { cluster: CLUSTER, owner: owner(address), ...(initialDepositUsdc ? { initialDepositUsdc } : {}) }),
   depositPlan: (address: string, amount: string) => request<PlanResponse>("/deposits/plan", { cluster: CLUSTER, owner: owner(address), amount }),
   withdrawalPlan: (address: string, amount: string) => request<PlanResponse>("/withdrawals/plan", { cluster: CLUSTER, owner: owner(address), amount }),
+  kaminoYield: () => request<KaminoYield>(`/protocols/kamino/yield?cluster=${CLUSTER}`),
+  exponentYield: () => request<ExponentYield>(`/protocols/exponent/yield?cluster=${CLUSTER}`),
+  kaminoPosition: (address: string) =>
+    request<KaminoPosition>(`/protocols/kamino/position?ownerType=solana&address=${encodeURIComponent(address)}&cluster=${CLUSTER}`),
+  kaminoDepositPlan: (address: string, source: "wallet" | "safe", amount: string) =>
+    request<PlanResponse>("/protocols/kamino/deposits/plan", { cluster: CLUSTER, owner: owner(address), source, amount }),
+  kaminoRedeemPlan: (address: string, selection: PositionSelection) =>
+    request<PlanResponse>("/protocols/kamino/withdrawals/plan", { cluster: CLUSTER, owner: owner(address), phase: "redeem", ...selection }),
+  kaminoReturnPlan: (address: string, redemptionSignature: string) =>
+    request<PlanResponse>("/protocols/kamino/withdrawals/plan", { cluster: CLUSTER, owner: owner(address), phase: "return", redemptionSignature }),
+  exponentPosition: (address: string) =>
+    request<ExponentPosition>(`/protocols/exponent/position?ownerType=solana&address=${encodeURIComponent(address)}&cluster=${CLUSTER}`),
+  exponentSetupPlan: (address: string) => request<PlanResponse>("/protocols/exponent/deposits/plan", { cluster: CLUSTER, owner: owner(address), phase: "setup" }),
+  exponentInvestPlan: (address: string, source: "wallet" | "safe", amount: string) =>
+    request<PlanResponse>("/protocols/exponent/deposits/plan", { cluster: CLUSTER, owner: owner(address), phase: "invest", source, amount }),
+  exponentExitPlan: (address: string, selection: PositionSelection) =>
+    request<PlanResponse>("/protocols/exponent/withdrawals/plan", { cluster: CLUSTER, owner: owner(address), ...selection }),
   txStatus: (signature: string, lastValidBlockHeight: number) =>
     request<TxStatus>(`/transactions/${encodeURIComponent(signature)}?cluster=${CLUSTER}&lastValidBlockHeight=${lastValidBlockHeight}`),
 };

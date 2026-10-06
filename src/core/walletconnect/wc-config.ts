@@ -8,6 +8,6 @@ export const WC_METADATA = {
   url: "https://yieldai.app",
   icons: ["https://yieldai.app/icon.png"],
   redirect: {
-    native: "yieldaimobile://",
+    native: `${process.env.EXPO_PUBLIC_APP_SCHEME?.trim() || "yieldaimobile"}://`,
   },
 };

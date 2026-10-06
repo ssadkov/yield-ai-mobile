@@ -87,6 +87,7 @@ export function relativeMinutes(ts: number, now = Date.now()) {
   return `${Math.round(h / 24)} d ago`;
 }
 
+/** "6.32%". An unknown rate (NaN) shows as a dash, never as 0%. */
 export function pct(apr: number) {
-  return (apr * 100).toFixed(2) + "%";
+  return Number.isFinite(apr) ? (apr * 100).toFixed(2) + "%" : "—";
 }
