@@ -3,8 +3,8 @@ import { WalletError, getDriver } from "../wallet";
 import { SafeApiError, assertNetwork, safeApi, sol, usdcString, type Cost, type PlanResponse, type ReadyPlan, type SafeApi, type TxStatus } from "./api";
 import { CLUSTER, DEVNET, EXPECTED_NETWORK } from "./config";
 import { isResolved, loadJournal, openEntry, putEntry, updateEntry, useJournal, type JournalEntry, type OpKind } from "./journal";
-import { blockHeight, sendRaw } from "./rpc";
-import { TxCheckError, checkSigned, checkUnsigned } from "./tx";
+import { RpcError, blockHeight, isTransportRejection, sendRaw } from "./rpc";
+import { TxCheckError, checkSigned, checkUnsigned, parseTx } from "./tx";
 
 /**
  * One signed transaction: plan → check → wallet signs → journal → send → confirm.
@@ -149,9 +149,10 @@ async function broadcast(entry: JournalEntry, deps: Deps, first: boolean) {
       if (entry.status === "signed") await updateEntry(entry.id, { status: "submitted" });
       return;
     }
-    if (first && isPreflightRejection(msg)) {
+    if (first && (isPreflightRejection(msg) || isTransportRejection(e))) {
+      log("send rejected", { error: msg, response: e instanceof RpcError ? e.body : undefined });
       await updateEntry(entry.id, { status: "failed", error: msg });
-      throw new WalletError("FAILED", `Solana rejected the transaction. No funds moved. (${msg.replace(/^Solana RPC -?\d+:\s*/, "").slice(0, 140)})`);
+      throw new WalletError("FAILED", `Solana rejected the transaction. No funds moved. (${msg.replace(/^Solana RPC[^:]*:\s*/, "").slice(0, 140)})`, "signed");
     }
     // Network trouble: the status polling below finds out, and re-sends while the blockhash is valid.
   }
@@ -190,6 +191,19 @@ async function heightNear(lastValid: number, deps: Deps): Promise<number | null>
   return h;
 }
 
+/** Diagnostics only: some wallets (Phantom on Mainnet) rewrite the message before signing, e.g. add Lighthouse guards. */
+function logWalletChanges(unsignedTx: string, signedTx: string) {
+  try {
+    const before = Buffer.from(parseTx(Buffer.from(unsignedTx, "base64")).message).toString("hex");
+    const after = parseTx(Buffer.from(signedTx, "base64"));
+    if (Buffer.from(after.message).toString("hex") !== before) {
+      log("wallet changed the transaction", { programs: after.programIds, tags: after.tags });
+    }
+  } catch (e) {
+    log("wallet change check failed", { error: e instanceof Error ? e.message : String(e) });
+  }
+}
+
 function log(event: string, data?: object) {
   console.log(`[chain] ${event}`, data ? JSON.stringify(data) : "");
 }
@@ -214,7 +228,7 @@ export async function settle(id: string, until: "confirmed" | "finalized", deps:
       const failed = st.status === "failed" || (!!st.error && (st.status === "confirmed" || st.status === "finalized"));
       if (failed) {
         await updateEntry(id, { status: "failed", error: typeof st.error === "string" ? st.error : JSON.stringify(st.error) });
-        throw new WalletError("FAILED", "The transaction failed on Solana. No funds moved.");
+        throw new WalletError("FAILED", "The transaction failed on Solana. No funds moved.", "sent");
       }
       if (st.status === "finalized") return (await updateEntry(id, { status: "finalized", error: undefined }))!;
       if (st.status === "confirmed") {
@@ -282,6 +296,7 @@ export async function executePlan(p: ReadyPlan, meta: PlanMeta, owner: string, h
     signedTx = await deps.sign(step.transaction);
     log("signed", { ms: Date.now() - t0 });
     signature = checkSigned(signedTx, { owner, blockhash: p.blockhash });
+    logWalletChanges(step.transaction, signedTx);
   } catch (e) {
     throw friendlyError(e);
   }
@@ -291,12 +306,12 @@ export async function executePlan(p: ReadyPlan, meta: PlanMeta, owner: string, h
   const height = await heightNear(p.lastValidBlockHeight, deps);
   if (height !== null && height > p.lastValidBlockHeight) {
     log("expired before send", { height, lastValid: p.lastValidBlockHeight });
-    throw new WalletError("FAILED", "Approval took too long and the transaction expired before it was sent. Nothing moved. Try again and approve right away.");
+    throw new WalletError("FAILED", "Approval took too long and the transaction expired before it was sent. Nothing moved. Try again and approve right away.", "signed");
   }
   // Exponent quotes expire on their own (~90 s); a stale one isn't sent.
   if (p.quoteExpiresAtUnixSeconds && Date.now() / 1000 > p.quoteExpiresAtUnixSeconds) {
     log("quote expired before send", { expiresAt: p.quoteExpiresAtUnixSeconds });
-    throw new WalletError("FAILED", "The price quote expired before it was sent. Nothing moved. Try again and approve right away.");
+    throw new WalletError("FAILED", "The price quote expired before it was sent. Nothing moved. Try again and approve right away.", "signed");
   }
 
   const now = Date.now();
@@ -320,7 +335,7 @@ export async function executePlan(p: ReadyPlan, meta: PlanMeta, owner: string, h
   try {
     await putEntry(entry);
   } catch {
-    throw new WalletError("FAILED", "Couldn't save the signed transaction on this phone, so it wasn't sent. Try again.");
+    throw new WalletError("FAILED", "Couldn't save the signed transaction on this phone, so it wasn't sent. Try again.", "signed");
   }
 
   hooks.onPhase("submitting");

@@ -5,6 +5,7 @@ import { SafeApiError, usdcString, type PlanResponse, type SafeApi, type SafeSta
 import { EXPECTED_NETWORK } from "../config";
 import { runOperation, type Deps } from "../engine";
 import { openEntry, updateEntry, useJournal } from "../journal";
+import { RpcError } from "../rpc";
 import { TxCheckError, checkSigned, checkUnsigned, parseTx } from "../tx";
 import { exponentExit, kaminoReturn, kaminoWithdraw } from "../protocols";
 
@@ -218,6 +219,15 @@ describe("runOperation", () => {
     expect(useJournal.getState().entries[0].status).toBe("failed");
     expect(openEntry(OWNER)).toBeNull();
     await expect(runOperation({ kind: "deposit", amountUsd: 1 }, OWNER, hooks(), d)).resolves.toBeTruthy();
+  });
+
+  it("fails right away when the API transport refuses the transaction", async () => {
+    // The Mainnet /rpc answers {error:{code:"INVALID_TRANSACTION"}} with a 4xx: nothing was broadcast.
+    const d = deps();
+    (d.send as jest.Mock).mockRejectedValueOnce(new RpcError("Solana RPC INVALID_TRANSACTION: Expected one signed owner v0 transaction", 400, "INVALID_TRANSACTION"));
+    await expect(runOperation({ kind: "deposit", amountUsd: 1 }, OWNER, hooks(), d)).rejects.toThrow("Expected one signed owner v0 transaction");
+    expect(useJournal.getState().entries[0].status).toBe("failed");
+    expect(d.api.txStatus).not.toHaveBeenCalled();
   });
 
   it("waits out an RPC node that hasn't seen the blockhash yet", async () => {

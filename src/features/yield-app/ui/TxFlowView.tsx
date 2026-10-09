@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { View } from "react-native";
 import Animated, { FadeOutLeft, SlideInRight, useAnimatedStyle, withTiming } from "react-native-reanimated";
 import type { TxFlow } from "../lib/tx-flow";
-import type { TxStep, WalletId } from "../wallet";
+import type { TxStep, WalletError, WalletId } from "../wallet";
 import { SheetHeader } from "./BottomSheet";
 import { PrimaryButton } from "./Button";
 import { SideButtonHint } from "./Screen";
@@ -55,7 +55,7 @@ export function TxFlowView({ flow, walletId, walletName, onCancel, doneLabel = "
   const overview = steps.map((s, i) => {
     const p = phases[i];
     const state: StepState = p === "done" ? "done" : p === "failed" ? "failed" : i === current ? "active" : "pending";
-    const sub = p === "done" ? "Confirmed" : p === "failed" ? "Not signed" : p === "submitting" ? "Sending to Solana…" : p === "signing" ? "Waiting for your signature" : s.detail;
+    const sub = p === "done" ? "Confirmed" : p === "failed" ? failedLabel(error) : p === "submitting" ? "Sending to Solana…" : p === "signing" ? "Waiting for your signature" : s.detail;
     return { title: s.title, sub, state };
   });
 
@@ -163,4 +163,12 @@ function ProgressSeg({ fill, failed }: { fill: number; failed: boolean }) {
       <Animated.View style={[{ height: "100%", borderRadius: 2, backgroundColor: failed ? C.danger : C.blue }, a]} />
     </View>
   );
+}
+
+/** What happened to a failed step: the wallet signs first, then the app sends, then Solana confirms. */
+function failedLabel(error: WalletError | null): string {
+  if (error?.code === "UNCONFIRMED") return "Not confirmed";
+  if (error?.stage === "sent") return "Failed on Solana";
+  if (error?.stage === "signed") return "Not submitted";
+  return "Not signed";
 }

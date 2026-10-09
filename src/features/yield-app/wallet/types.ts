@@ -33,10 +33,14 @@ export type TxPhase = "pending" | "signing" | "submitting" | "done" | "failed";
 /** PENDING / UNCONFIRMED / FAILED come from the real-backend flow (chain/engine.ts). */
 export type WalletErrorCode = "USER_REJECTED" | "NOT_AVAILABLE" | "NOT_SUPPORTED" | "TIMEOUT" | "UNKNOWN" | "PENDING" | "UNCONFIRMED" | "FAILED";
 
+/** How far a failed transaction got: signed but never sent, or sent and failed on chain. */
+export type WalletErrorStage = "signed" | "sent";
+
 export class WalletError extends Error {
   constructor(
     public code: WalletErrorCode,
     message: string,
+    public stage?: WalletErrorStage,
   ) {
     super(message);
     this.name = "WalletError";
