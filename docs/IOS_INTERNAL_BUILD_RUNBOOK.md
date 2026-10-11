@@ -10,7 +10,6 @@ Working process for running YieldAI Mobile on iPhone via EAS internal builds and
 - EAS project: `@sadkovs-team/yieldai`
 - EAS project ID: `d29f82e7-7767-44bf-9282-273a09e8ac3c`
 - iOS bundle identifier: `com.yieldai.mobile`
-- WebView URL (preview + production builds): `https://yieldai.app/`
 - Internal iOS build: EAS profile `preview`
 - OTA updates: EAS Update channels `preview` and `production`
 
@@ -24,8 +23,8 @@ Working process for running YieldAI Mobile on iPhone via EAS internal builds and
   - `expo.updates.url`: `https://u.expo.dev/d29f82e7-7767-44bf-9282-273a09e8ac3c`
   - `expo.runtimeVersion.policy`: `appVersion`
 - `eas.json`
-  - `build.preview`: internal distribution, channel `preview`, WebView `https://yieldai.app/`
-  - `build.production`: channel `production`, WebView `https://yieldai.app/`
+  - `build.preview`: internal distribution, channel `preview`
+  - `build.production`: channel `production`
 
 `EXPO_PUBLIC_WC_PROJECT_ID` is still optional for early iPhone builds. Without it, Jupiter / WalletConnect flows can fail at runtime. Petra and Phantom do not depend on it.
 
@@ -124,7 +123,7 @@ Rebuild a full IPA when you change:
 
 On a registered iPhone with the latest internal build:
 
-1. App opens and loads `https://yieldai.app/`
+1. App opens on the native onboarding screen
 2. Connect Phantom and run a minimal transaction flow
 3. Connect Petra and run a minimal transaction flow
 4. Confirm return from wallet deeplink into YieldAI Mobile

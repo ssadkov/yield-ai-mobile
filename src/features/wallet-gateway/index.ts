@@ -1,4 +1,3 @@
-export { useWalletGateway } from "./model/use-wallet-gateway";
 export { isWalletCallbackUrl } from "./lib/wallet-callback-url";
 export { WalletService } from "@/core/wallet";
 export { WalletConnectionError } from "@/core/wallet";
